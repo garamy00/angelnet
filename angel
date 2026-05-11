@@ -1,0 +1,87 @@
+#!/bin/bash
+set -euo pipefail
+
+# AngelNet 회의실 대시보드 진입점
+# venv 활성화 -> 서버 백그라운드 기동 -> 헬스체크 -> 브라우저 자동 열기
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ -z "${ANGELNET_USER:-}" ]]; then
+    echo "Error: ANGELNET_USER 환경변수가 필요합니다." >&2
+    echo "       예: export ANGELNET_USER=youruserid" >&2
+    exit 1
+fi
+
+VENV="$SCRIPT_DIR/.venv"
+# 기본값 0.0.0.0: 외부(사내 네트워크) 접근 허용. 호스트 본인은 로컬 URL 로 열기.
+HOST="${ANGELDASH_HOST:-0.0.0.0}"
+PORT="${ANGELDASH_PORT:-5173}"
+URL="http://127.0.0.1:${PORT}"
+
+if [[ ! -d "$VENV" ]]; then
+    echo "Error: venv not found at $VENV. Run: python3 -m venv .venv && pip install -e '.[dev]'" >&2
+    exit 1
+fi
+
+# venv 활성화
+source "$VENV/bin/activate"
+
+# 패스워드 첫 입력은 Keychain 미리 채워두는 게 좋음 (로그가 깔끔)
+python -c "
+from angeldash.auth import KeychainStore
+store = KeychainStore(account='${ANGELNET_USER:?Set ANGELNET_USER environment variable (예: export ANGELNET_USER=youruserid)}')
+if not store.get():
+    raise SystemExit('FIRST_RUN')
+" || {
+    # Keychain 비어있음 -> foreground 로 실행해 prompt 처리 (브라우저 자동 열기 미실행)
+    exec python -m angeldash --user "${ANGELNET_USER:?Set ANGELNET_USER environment variable (예: export ANGELNET_USER=youruserid)}" --host "$HOST" --port "$PORT"
+}
+
+# 서버 백그라운드 기동
+LOG_FILE="$SCRIPT_DIR/.angeldash.log"
+python -m angeldash --user "${ANGELNET_USER:?Set ANGELNET_USER environment variable (예: export ANGELNET_USER=youruserid)}" --host "$HOST" --port "$PORT" \
+    > "$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+
+cleanup() {
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "Stopping server (pid=$SERVER_PID)..."
+        kill "$SERVER_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# 헬스체크 (최대 10초)
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -sf "${URL}/api/me" > /dev/null 2>&1; then
+        break
+    fi
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "Error: server died during startup. Log:" >&2
+        cat "$LOG_FILE" >&2
+        exit 1
+    fi
+    sleep 1
+done
+
+if ! curl -sf "${URL}/api/me" > /dev/null 2>&1; then
+    echo "Error: server health check failed after 10s. Log:" >&2
+    tail -50 "$LOG_FILE" >&2
+    exit 1
+fi
+
+echo "Server ready at $URL (pid=$SERVER_PID, log=$LOG_FILE)"
+# 외부에서 접근 가능한 IP 안내 (Wi-Fi/이더넷 인터페이스 IP)
+if [[ "$HOST" != "127.0.0.1" ]]; then
+    EXT_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+    if [[ -n "$EXT_IP" ]]; then
+        echo "External access: http://${EXT_IP}:${PORT}"
+    fi
+    echo "⚠️  외부 접근 허용 중 (HOST=${HOST}). 사내 신뢰 네트워크에서만 사용하세요."
+fi
+echo "Press Ctrl+C to stop."
+
+open "$URL"
+
+wait "$SERVER_PID"

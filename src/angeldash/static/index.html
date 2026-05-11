@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1280">
+  <title>AngelNet 회의실 대시보드</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-title">🏢 AngelNet 회의실 대시보드</div>
+    <div class="app-user">
+      <span id="user-name">로딩...</span>
+      <button id="btn-refresh" title="새로고침">🔄</button>
+    </div>
+  </header>
+
+  <section class="controls">
+    <div class="view-toggle">
+      <button class="view-btn" data-view="day">일</button>
+      <button class="view-btn" data-view="week2">2주</button>
+    </div>
+
+    <button id="date-prev" title="이전">◀</button>
+    <input type="date" id="date-input">
+    <button id="date-next" title="다음">▶</button>
+
+    <label>층:
+      <select id="floor-select">
+        <option value="8" selected>8층</option>
+        <option value="10">10층</option>
+        <option value="12">12층</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="room-filter" id="room-filter">
+    <span class="rf-label">회의실:</span>
+    <div class="room-chips" id="room-chips"></div>
+  </section>
+
+  <main class="grid-wrap">
+    <table id="schedule-grid" aria-label="회의실 시간표"></table>
+    <div id="week-container" hidden></div>
+  </main>
+
+  <section class="my-reservations">
+    <h2>📋 내 예약 (90일)</h2>
+    <ul id="my-list"></ul>
+  </section>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
