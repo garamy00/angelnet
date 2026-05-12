@@ -29,13 +29,27 @@ if [[ ! -f "$ROOMS_PY" && -f "$ROOMS_EXAMPLE" ]]; then
     echo "   (현재는 example dummy 데이터로 시작)"
 fi
 
+# venv 자동 생성 (없으면)
 if [[ ! -d "$VENV" ]]; then
-    echo "Error: venv not found at $VENV. Run: python3 -m venv .venv && pip install -e '.[dev]'" >&2
-    exit 1
+    echo "📦 venv 가 없습니다. python3 -m venv .venv 로 자동 생성 중..."
+    python3 -m venv "$VENV" || {
+        echo "Error: venv 생성 실패. python3 가 설치되어 있는지 확인하세요." >&2
+        exit 1
+    }
 fi
 
 # venv 활성화
 source "$VENV/bin/activate"
+
+# angeldash 패키지 설치 확인 — 없으면 자동 설치
+if ! python -c "import angeldash" 2>/dev/null; then
+    echo "📦 angeldash 패키지 설치 중 (pip install -e '.[dev]')..."
+    pip install -q -e ".[dev]" || {
+        echo "Error: pip install 실패. 수동으로 'pip install -e \".[dev]\"' 실행하세요." >&2
+        exit 1
+    }
+    echo "✅ 설치 완료"
+fi
 
 # 패스워드 첫 입력은 Keychain 미리 채워두는 게 좋음 (로그가 깔끔)
 python -c "
