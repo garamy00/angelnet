@@ -1,9 +1,4 @@
-"""회의실 ID-이름 정적 매핑 및 층별 조회 헬퍼.
-
-NOTE: 이 파일은 example template. 실제 사용 시 `rooms.py` 로 복사하고
-본인 환경의 회의실 데이터로 교체하라.
-`rooms.py` 는 .gitignore 에 등록되어 git 추적되지 않는다.
-"""
+"""회의실 ID-이름 정적 매핑 및 층별 조회 헬퍼."""
 
 from dataclasses import dataclass
 
@@ -17,16 +12,22 @@ class Room:
     floor: int
 
 
-# 예시 데이터 — 실제 사용 시 본인 환경의 회의실로 교체
+# 기존 archive/angel_add 의 get_room_name 케이스를 그대로 옮김
 _ROOM_TABLE: list[tuple[str, str, int]] = [
-    ("1", "Floor 10 Conference Room A", 10),
-    ("2", "Floor 10 Conference Room 1", 10),
-    ("3", "Floor 10 Conference Room 2", 10),
-    ("6", "Floor 8 Conference Room A", 8),
-    ("7", "Floor 8 Conference Room 1", 8),
-    ("8", "Floor 8 Conference Room 2", 8),
-    ("10", "Floor 8 LAB 1", 8),
-    ("11", "Floor 8 LAB 2", 8),
+    ("1", "10층 대회의실", 10),
+    ("2", "10층 1번 회의실", 10),
+    ("3", "10층 2번 회의실", 10),
+    ("4", "10층 3번 회의실", 10),
+    ("5", "10층 4번 회의실", 10),
+    ("6", "8층 대회의실", 8),
+    ("7", "8층 1번 회의실", 8),
+    ("8", "8층 2번 회의실", 8),
+    ("9", "8층 3번 회의실", 8),
+    ("10", "8층 2번 LAB", 8),
+    ("11", "8층 3번 LAB", 8),
+    ("12", "12층 2번 회의실", 12),
+    ("13", "12층 3번 회의실", 12),
+    ("14", "12층 4번 회의실", 12),
 ]
 
 ROOMS: dict[str, Room] = {
@@ -37,7 +38,7 @@ ROOMS: dict[str, Room] = {
 def get_room_name(room_id: str) -> str:
     """회의실 ID 로 한글 이름을 반환한다. 없으면 fallback 라벨."""
     room = ROOMS.get(room_id)
-    return room.name if room else f"Unknown Room ({room_id})"
+    return room.name if room else f"알 수 없는 회의실({room_id})"
 
 
 def list_rooms_on_floor(floor: int) -> list[Room]:
