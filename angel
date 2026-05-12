@@ -41,10 +41,10 @@ fi
 # venv 활성화
 source "$VENV/bin/activate"
 
-# angeldash 패키지 설치 확인 — 없으면 자동 설치
+# angeldash 패키지 설치 확인 — 없으면 자동 설치 (의존성 다운로드 1~3분)
 if ! python -c "import angeldash" 2>/dev/null; then
-    echo "📦 angeldash 패키지 설치 중 (pip install -e '.[dev]')..."
-    pip install -q -e ".[dev]" || {
+    echo "📦 angeldash 패키지 설치 중 — 의존성 다운로드 1~3분 소요됩니다..."
+    pip install -e ".[dev]" || {
         echo "Error: pip install 실패. 수동으로 'pip install -e \".[dev]\"' 실행하세요." >&2
         exit 1
     }
