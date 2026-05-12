@@ -19,6 +19,16 @@ HOST="${ANGELDASH_HOST:-0.0.0.0}"
 PORT="${ANGELDASH_PORT:-5173}"
 URL="http://127.0.0.1:${PORT}"
 
+# 첫 실행 시 rooms.example.py → rooms.py 자동 복사 (gitignore 로 인해 신규 clone 환경에 없음)
+ROOMS_PY="$SCRIPT_DIR/src/angeldash/rooms.py"
+ROOMS_EXAMPLE="$SCRIPT_DIR/src/angeldash/rooms.example.py"
+if [[ ! -f "$ROOMS_PY" && -f "$ROOMS_EXAMPLE" ]]; then
+    cp "$ROOMS_EXAMPLE" "$ROOMS_PY"
+    echo "📋 First run: src/angeldash/rooms.example.py → rooms.py 자동 복사 완료."
+    echo "   본인 환경의 실제 회의실 ID/이름/층으로 rooms.py 를 수정한 뒤 다시 실행하세요."
+    echo "   (현재는 example dummy 데이터로 시작)"
+fi
+
 if [[ ! -d "$VENV" ]]; then
     echo "Error: venv not found at $VENV. Run: python3 -m venv .venv && pip install -e '.[dev]'" >&2
     exit 1
