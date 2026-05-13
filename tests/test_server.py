@@ -9,7 +9,8 @@ from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 from angeldash._common.models import User
 from angeldash.rooms.client import AngelNetClient
 from angeldash.rooms.models import Reservation
-from angeldash.server import build_app, get_client, get_password
+from angeldash.rooms.routes import get_client, get_password
+from angeldash.server import build_app
 
 SAMPLE_RES = {
     "id": "28",

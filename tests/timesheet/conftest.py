@@ -47,9 +47,9 @@ def test_app(conn: sqlite3.Connection, mock_client: AsyncMock):
     회의실(get_client/get_password in angeldash.server) 도 같은 mock_client 로 override
     해두면 /api/me (회의실측 핸들러) 도 테스트 가능. mock_client.login 이 양쪽 호환.
     """
+    from angeldash.rooms.routes import get_client as rooms_get_client
+    from angeldash.rooms.routes import get_password as shared_get_password
     from angeldash.server import build_app
-    from angeldash.server import get_client as rooms_get_client
-    from angeldash.server import get_password as shared_get_password
     from angeldash.timesheet.routes import (
         get_client as ts_get_client,
         get_conn as ts_get_conn,
