@@ -133,16 +133,20 @@ def test_future_afternoon_half_alone_is_ignored() -> None:
 
 
 def test_future_afternoon_half_then_full_skips_to_next_with_vac() -> None:
-    """미래의 첫 휴가가 오후 반차 + 그 다음 영업일에 연차면, 연차부터 보고."""
+    """미래의 첫 휴가가 오후 반차면 그 날 AM 이 근무로 끼므로 안내 책임이 그 날로 이동.
+
+    반일 단위 규칙: base 종일 근무 → 다음날 AM = 근무(반차오후만 있음) → STOP.
+    다음주 월 연차는 그 직전 금 PM 근무 후 시작되므로 금 보고에서 안내된다.
+    """
     out = generate_misc_auto(
         "2026-05-14",  # 목
         vacations=[
-            vac("2026-05-15", "반차(오후)", 4),  # 금 오후 반차 (출근 가능, 건너뜀)
+            vac("2026-05-15", "반차(오후)", 4),  # 금 오후 반차
             vac("2026-05-18", "연차", 8),         # 다음주 월 연차
         ],
         holidays=[],
     )
-    assert out == "다음주 월요일 연차입니다"
+    assert out == ""
 
 
 def test_today_pm_half_still_reported_even_without_future() -> None:
@@ -153,3 +157,73 @@ def test_today_pm_half_still_reported_even_without_future() -> None:
         holidays=[],
     )
     assert out == "오늘 오후 반차입니다"
+
+
+def test_pm_half_today_continues_to_next_am_half() -> None:
+    """오늘 오후 반차 + 내일 오전 반차 → 점심부터 다음날 점심까지 연속 off."""
+    out = generate_misc_auto(
+        "2026-05-14",  # 목
+        vacations=[
+            vac("2026-05-14", "반차(오후)", 4),
+            vac("2026-05-15", "반차(오전)", 4),
+        ],
+        holidays=[],
+    )
+    assert out == "오늘 오후 반차~내일 오전 반차입니다"
+
+
+def test_am_half_today_pm_works_announces_only_after_pm_end() -> None:
+    """오늘 오전 반차 + 다음주 월 연차.
+
+    오전 반차는 보고 시점 기준 과거(PM 근무 후 보고), 다음주 월요일 연차만 안내.
+    """
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[
+            vac("2026-05-15", "반차(오전)", 4),  # 금 오전 반차
+            vac("2026-05-18", "연차", 8),         # 다음주 월
+        ],
+        holidays=[],
+    )
+    assert out == "다음주 월요일 연차입니다"
+
+
+def test_full_work_today_next_day_pm_half_means_no_announce() -> None:
+    """오늘 종일 근무 + 내일 오후 반차만 → 내일 AM 근무가 끼므로 안내 없음."""
+    out = generate_misc_auto(
+        "2026-05-13",  # 수
+        vacations=[vac("2026-05-14", "반차(오후)", 4)],
+        holidays=[],
+    )
+    assert out == ""
+
+
+def test_user_scenario_wed_thu_fri_continuous_half_then_next_week() -> None:
+    """사용자 시나리오: 수(근무)→목(오후반차)→금(가정의날+오전반차)→다음주 월-금 연차.
+
+    각 날짜의 보고 자동 안내:
+    - 수: 빈 문자열 (목 AM 은 근무이므로 안내 없음)
+    - 목: 오늘 오후 반차 ~ 내일 오전 반차 (점심부터 다음날 점심까지 연속)
+    - 금: 다음주 월요일 ~ 다음주 금요일까지 연차
+      (금 AM 반차는 과거, PM 근무 후 시작되는 다음 off-span)
+    """
+    # 2025-11-19 (수) / 11-20 (목) / 11-21 (금) / 11-24 (월) ... 11-28 (금)
+    vacs = [
+        vac("2025-11-20", "반차(오후)", 4),
+        vac("2025-11-21", "반차(오전)", 4),
+        vac("2025-11-24", "연차", 8),
+        vac("2025-11-25", "연차", 8),
+        vac("2025-11-26", "연차", 8),
+        vac("2025-11-27", "연차", 8),
+        vac("2025-11-28", "연차", 8),
+    ]
+    hols = [hol("2025-11-21", "가정의날")]
+    excl = {"가정의날"}
+
+    assert generate_misc_auto("2025-11-19", vacs, hols, excl) == ""
+    assert generate_misc_auto("2025-11-20", vacs, hols, excl) == (
+        "오늘 오후 반차~내일 오전 반차입니다"
+    )
+    assert generate_misc_auto("2025-11-21", vacs, hols, excl) == (
+        "다음주 월요일~다음주 금요일까지 연차입니다"
+    )
