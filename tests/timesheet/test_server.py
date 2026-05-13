@@ -257,6 +257,7 @@ def test_get_settings_returns_defaults_for_unset(api):
         "upnote.title_template",
         "upnote.body_template",
         "team_report.template",
+        "ongoing_schedule",
     ):
         assert key in body
 
@@ -265,6 +266,14 @@ def test_put_settings_updates_values(api):
     api.put("/api/settings", json={"upnote.notebook_id": "abc-123"})
     r = api.get("/api/settings")
     assert r.json()["upnote.notebook_id"] == "abc-123"
+
+
+def test_put_settings_ongoing_schedule_round_trip(api):
+    """ongoing_schedule key 가 PUT → DB → GET round-trip 으로 보존되는지."""
+    payload = "<< 5월 월간 계획 >>\n*) EM 고도화 (05/06 ~ 05/29)"
+    api.put("/api/settings", json={"ongoing_schedule": payload})
+    r = api.get("/api/settings")
+    assert r.json()["ongoing_schedule"] == payload
 
 
 def test_put_settings_rejects_invalid_jinja2(api):

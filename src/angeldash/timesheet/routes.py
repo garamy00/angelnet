@@ -727,6 +727,8 @@ def register_routes(app: FastAPI) -> None:
         "team_report.template": DEFAULT_TEAM_REPORT,
         "misc.holiday_exclude_labels": "",  # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
         "join.auto_task_name": "개발",  # 프로젝트 가입 시 자동으로 가입할 task name
+        # 일일업무보고 페이지 상단의 "진행중인 일정" 영역 (월간/주간 계획 보관용)
+        "ongoing_schedule": "",
     }
 
     @app.get("/api/settings")
