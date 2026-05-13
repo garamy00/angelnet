@@ -19,8 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from ._common.auth import KeychainStore
 from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from ._common.models import User
-from .models import Reservation, ReservationCreate
 from .rooms.client import AngelNetClient
+from .rooms.models import Reservation, ReservationCreate
 from .rooms.registry import ROOMS, list_rooms_on_floor
 from .timesheet import db as ts_db
 from .timesheet import routes as ts_routes

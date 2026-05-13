@@ -13,7 +13,7 @@ import httpx
 from .._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .._common.http_relogin import AutoReloginHttp
 from .._common.models import User
-from ..models import Reservation, ReservationCreate
+from .models import Reservation, ReservationCreate
 
 logger = logging.getLogger(__name__)
 

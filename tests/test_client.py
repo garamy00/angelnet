@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from angeldash._common.errors import ApiError, AuthError, BotBlockedError
-from angeldash.models import Reservation, ReservationCreate
+from angeldash.rooms.models import Reservation, ReservationCreate
 
 PAYLOAD = ReservationCreate(
     date="2026-06-01",
