@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ._http_relogin import AutoReloginHttp
+from ._common.http_relogin import AutoReloginHttp
 from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .models import Reservation, ReservationCreate, User
 
