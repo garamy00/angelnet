@@ -5,9 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from angeldash.client import AngelNetClient
 from angeldash._common.errors import ApiError, AuthError, BotBlockedError
-from angeldash.models import Reservation, User
+from angeldash._common.models import User
+from angeldash.client import AngelNetClient
+from angeldash.models import Reservation
 from angeldash.server import build_app, get_client, get_password
 
 SAMPLE_RES = {

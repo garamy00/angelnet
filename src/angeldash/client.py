@@ -10,9 +10,10 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ._common.http_relogin import AutoReloginHttp
 from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
-from .models import Reservation, ReservationCreate, User
+from ._common.http_relogin import AutoReloginHttp
+from ._common.models import User
+from .models import Reservation, ReservationCreate
 
 logger = logging.getLogger(__name__)
 

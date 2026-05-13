@@ -1,4 +1,4 @@
-"""Pydantic 모델: 예약·사용자 도메인 객체."""
+"""Pydantic 모델: 예약 도메인 객체."""
 
 from __future__ import annotations
 
@@ -11,14 +11,6 @@ from pydantic import BaseModel, Field, field_validator
 
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$")
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
-class User(BaseModel):
-    """현재 로그인 사용자 정보 (토큰 응답에서 추출)."""
-
-    user_id: str
-    name: str
-    email: str | None = None
 
 
 class Reservation(BaseModel):

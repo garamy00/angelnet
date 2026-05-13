@@ -3,7 +3,7 @@
 EntryInput / WeekNoteInput 등 *Input* 접미사 모델은 사용자가 보내는 페이로드용 (validation 강함).
 Entry / WeekNote 등은 DB 에서 읽어온 도메인 객체 (id 등 자동 필드 포함).
 
-User 는 angeldash.models 의 것을 공유 (회의실 모듈과 동일).
+User 는 angeldash._common.models 의 것을 공유 (회의실 모듈과 동일).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 
 # 회의실 서브패키지와 같은 User 타입 사용 → 외부에서 `from .models import User` 호환
-from ..models import User  # noqa: F401
+from .._common.models import User  # noqa: F401
 
 
 class EntryInput(BaseModel):
