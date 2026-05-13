@@ -92,11 +92,68 @@ export function debounce(fn, ms) {
   };
 }
 
-// 토스트 알림.
+// 토스트 알림 — 하단 작게.
 export function toast(message, kind = 'ok') {
   const el = document.createElement('div');
   el.className = `toast toast--${kind}`;
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3000);
+}
+
+// 화면 중앙 큰 메시지 (ok/fail). '확인' 버튼 또는 ms 후 자동 사라짐.
+// ms=0 이면 자동 닫힘 없음 (에러 박스 기본 동작 — 호출 측에서 명시).
+export function flash(message, kind = 'ok', ms = 6000) {
+  const root = document.createElement('div');
+  root.className = `flash flash--${kind}`;
+  root.innerHTML = `
+    <div class="flash__box">
+      <div class="flash__head">
+        <div class="flash__icon">${kind === 'fail' ? '⚠️' : '✅'}</div>
+        <div class="flash__msg"></div>
+      </div>
+      <div class="flash__actions">
+        <button type="button" class="flash__ok primary">확인</button>
+      </div>
+    </div>`;
+  root.querySelector('.flash__msg').textContent = message;
+  const dismiss = () => root.remove();
+  const okBtn = root.querySelector('.flash__ok');
+  okBtn.addEventListener('click', dismiss);
+  // 백드롭 클릭으로도 닫기 (박스 내부 클릭은 제외)
+  root.addEventListener('click', (e) => {
+    if (e.target === root) dismiss();
+  });
+  // Enter / Escape 단축키
+  const onKey = (e) => {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      document.removeEventListener('keydown', onKey);
+      dismiss();
+    }
+  };
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(root);
+  okBtn.focus();
+  if (ms > 0) setTimeout(() => {
+    document.removeEventListener('keydown', onKey);
+    dismiss();
+  }, ms);
+}
+
+// 장기 작업용 progress overlay. 반환된 핸들의 .close() 호출 시 종료.
+export function startProgress(label) {
+  const root = document.createElement('div');
+  root.className = 'progress-overlay';
+  root.innerHTML = `
+    <div class="progress-box">
+      <div class="spinner"></div>
+      <div class="progress-label"></div>
+    </div>`;
+  root.querySelector('.progress-label').textContent = label || '처리 중…';
+  document.body.appendChild(root);
+  return {
+    setLabel(text) { root.querySelector('.progress-label').textContent = text; },
+    close() { root.remove(); },
+  };
 }

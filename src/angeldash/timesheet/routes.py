@@ -61,6 +61,19 @@ class UpNoteSyncInput(BaseModel):
     dry_run: bool = False
 
 
+class NotionSyncInput(BaseModel):
+    """POST /api/actions/notion-sync 페이로드."""
+
+    week_iso: str
+    dry_run: bool = False
+
+
+class NotionTokenInput(BaseModel):
+    """PUT /api/settings/notion-token 페이로드."""
+
+    token: str = ""  # 빈 문자열이면 키체인 항목 삭제
+
+
 class TimesheetSubmitInput(BaseModel):
     """POST /api/actions/timesheet-submit 페이로드."""
 
@@ -244,6 +257,7 @@ def register_routes(app: FastAPI) -> None:
                 name=payload.name,
                 work_type=payload.work_type,
                 remote_id=payload.remote_id,
+                project_code=payload.project_code,
             )
         except sqlite3.IntegrityError as exc:
             raise HTTPException(
@@ -392,6 +406,39 @@ def register_routes(app: FastAPI) -> None:
             tasks = await client.list_jobtime_tasks(year_month=ym)
         except Exception as exc:
             raise HTTPException(500, str(exc)) from exc
+
+        # 각 task 에 project_code 매칭 (회사 프로젝트 관리 endpoint 에서 가져옴).
+        # 페이징: 한 페이지에 최대 50개 라서 가입된 프로젝트만 모두 모음.
+        # 실패해도 task 목록 자체는 정상 반환 (code 만 빈값).
+        name_to_code: dict[str, str] = {}
+        try:
+            joinable_first = await client.search_joinable_projects(
+                keyword="", page=1, page_size=200,
+            )
+            total = joinable_first.get("total", 0)
+            for r in joinable_first["rows"]:
+                if r.get("joined"):
+                    name_to_code[r["name"].strip()] = r.get("code", "").strip()
+            # 페이징 처리: 200 초과 시 다음 페이지들도 fetch
+            fetched = len(joinable_first["rows"])
+            page = 2
+            while fetched < total and page <= 20:
+                more = await client.search_joinable_projects(
+                    keyword="", page=page, page_size=200,
+                )
+                for r in more["rows"]:
+                    if r.get("joined"):
+                        name_to_code[r["name"].strip()] = r.get("code", "").strip()
+                fetched += len(more["rows"])
+                if not more["rows"]:
+                    break
+                page += 1
+        except Exception as exc:
+            logger.warning("project_code lookup failed (non-fatal): %s", exc)
+
+        # 각 task 에 project_code 부여
+        for t in tasks:
+            t["project_code"] = name_to_code.get(t["name"].strip(), "")
 
         # 매칭: (remote_id, work_type) 튜플 우선. 같은 task name 이라도 work_type 이
         # 다르면 별개 항목.
@@ -727,6 +774,29 @@ def register_routes(app: FastAPI) -> None:
         "team_report.template": DEFAULT_TEAM_REPORT,
         "misc.holiday_exclude_labels": "",  # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
         "join.auto_task_name": "개발",  # 프로젝트 가입 시 자동으로 가입할 task name
+        # 동기화 대상 활성 플래그 — false 면 메인 UI 의 해당 버튼이 숨겨짐
+        "upnote.enabled": "true",
+        "notion.enabled": "false",
+        # Notion 동기화 — 엔트리 단위 1행. 토큰은 키체인에 별도 저장.
+        "notion.database_id": "",  # Notion database UUID (대시 포함/제외 모두 가능)
+        "notion.prop_title": "Name",  # title property 이름
+        "notion.prop_date": "Date",
+        "notion.prop_project": "Project",
+        "notion.prop_worktype": "WorkType",
+        "notion.prop_hours": "Hours",
+        "notion.prop_category": "Category",
+        # Notion Week Summary — 주별 1행, page body 에 week_note 본문 삽입
+        "notion.week_enabled": "false",
+        "notion.week_db_id": "",
+        "notion.week_prop_title": "Week",
+        "notion.week_prop_date": "Date",
+        # Notion Projects — 등록된 프로젝트 목록을 Notion DB 에 1프로젝트=1페이지로 push.
+        # 신규만 추가하고 기존 페이지는 건드리지 않음 (사용자가 wiki 처럼 작성한 내용 보존)
+        "notion.projects_enabled": "false",
+        "notion.projects_db_id": "",
+        "notion.projects_prop_name": "Name",
+        "notion.projects_prop_worktype": "WorkType",
+        "notion.projects_prop_code": "Code",  # 회사 시스템 프로젝트 코드 (remote_id)
     }
 
     @app.get("/api/settings")
@@ -897,6 +967,355 @@ def register_routes(app: FastAPI) -> None:
             f"title={title}",
         )
         return {"title": title, "text": text, "opened": True}
+
+    # ─── Notion 동기화 ────────────────────────────────
+
+    from . import notion as notion_module
+    from ..auth import KeychainStore
+
+    NOTION_KEYCHAIN_SERVICE = "angeldash-notion"
+
+    def _week_monday_iso(week_iso: str) -> str:
+        """'2026-W19' → '2026-05-04' (해당 주 월요일 ISO 날짜)."""
+        import datetime as _dt
+        year_s, week_s = week_iso.split("-W")
+        return _dt.date.fromisocalendar(int(year_s), int(week_s), 1).isoformat()
+
+    async def _sync_notion_week(
+        *,
+        conn,
+        token: str,
+        week_iso: str,
+        week_db_id: str,
+    ) -> tuple[bool, str]:
+        """주간 메모(week_note) 를 Week Summary DB 에 동기화.
+
+        반환: (synced, action) — action 은 'created' | 'updated' | 'skipped(empty)'
+        body_md 가 비어 있으면 skip.
+        """
+        body_md = (db_module.get_week_note(conn, week_iso) or "").rstrip()
+        if not body_md.strip():
+            return False, "skipped(empty)"
+
+        title_prop = (
+            db_module.get_setting(conn, "notion.week_prop_title") or "Week"
+        )
+        date_prop = (
+            db_module.get_setting(conn, "notion.week_prop_date") or "Date"
+        )
+        monday_iso = _week_monday_iso(week_iso)
+        properties = {
+            title_prop: notion_module.title_prop(week_iso),
+            date_prop: notion_module.date_prop(monday_iso),
+        }
+        children = [notion_module.code_block(body_md)]
+
+        async with notion_module.NotionClient(token) as nc:
+            existing = await nc.query_database(
+                week_db_id,
+                filter=notion_module.filter_by_title(
+                    title_prop_name=title_prop, value=week_iso,
+                ),
+            )
+            if existing:
+                page_id = existing[0]["id"]
+                await nc.update_page(page_id, properties=properties)
+                await nc.replace_page_children(page_id, children=children)
+                return True, "updated"
+            await nc.create_page(
+                database_id=week_db_id,
+                properties=properties,
+                children=children,
+            )
+            return True, "created"
+
+
+    def _notion_keychain() -> KeychainStore:
+        """사용자 ID 는 settings 가 아니라 process 환경에서 가져온다."""
+        import os
+        user_id = os.environ.get("ANGELNET_USER", "")
+        if not user_id:
+            from fastapi import HTTPException
+            raise HTTPException(500, "ANGELNET_USER not set")
+        return KeychainStore(account=user_id, service=NOTION_KEYCHAIN_SERVICE)
+
+    @app.get("/api/settings/notion-token-status")
+    async def notion_token_status() -> dict:
+        """토큰 자체는 노출 안 하고 존재 여부만 반환."""
+        token = _notion_keychain().get()
+        return {"present": bool(token)}
+
+    @app.put("/api/settings/notion-token")
+    async def put_notion_token(payload: NotionTokenInput) -> dict:
+        keychain = _notion_keychain()
+        token = payload.token.strip()
+        if not token:
+            keychain.delete()
+            return {"present": False}
+        keychain.save(token)
+        return {"present": True}
+
+    @app.post("/api/actions/notion-projects-sync")
+    async def action_notion_projects_sync(conn=Depends(get_conn)) -> dict:
+        """등록된 프로젝트 목록 → Notion Projects DB 로 push.
+
+        신규(=Notion DB 에 같은 Name 의 페이지가 없는) 프로젝트만 생성.
+        기존 페이지는 건드리지 않음 (사용자가 wiki 로 작성한 내용 보존).
+        """
+        from fastapi import HTTPException
+
+        enabled = (
+            db_module.get_setting(conn, "notion.projects_enabled") or "false"
+        ).strip().lower() == "true"
+        if not enabled:
+            raise HTTPException(400, "notion.projects_enabled 가 false 입니다")
+        db_id = (
+            db_module.get_setting(conn, "notion.projects_db_id") or ""
+        ).strip()
+        if not db_id:
+            raise HTTPException(400, "notion.projects_db_id 가 설정에 없습니다")
+        token = _notion_keychain().get()
+        if not token:
+            raise HTTPException(
+                400, "Notion 토큰이 키체인에 없습니다. 설정 페이지에서 저장하세요.",
+            )
+
+        name_prop = (
+            db_module.get_setting(conn, "notion.projects_prop_name") or "Name"
+        )
+        worktype_prop = (
+            db_module.get_setting(conn, "notion.projects_prop_worktype")
+            or "WorkType"
+        )
+        code_prop = (
+            db_module.get_setting(conn, "notion.projects_prop_code") or "Code"
+        )
+
+        # 로컬 프로젝트 목록
+        projects = db_module.list_projects(conn, active_only=False)
+
+        added: list[str] = []
+        skipped: list[str] = []
+        code_backfilled: list[str] = []  # 기존 페이지의 빈 Code 만 채운 케이스
+        try:
+            async with notion_module.NotionClient(token) as nc:
+                # 전체 Notion DB 페이지를 한 번에 fetch 해서 title 인덱스 구축
+                # (페이지 수가 많으면 query_database 가 페이징 필요 — 여기선 단순화)
+                rows = await nc.query_database(db_id)
+                # 기존 title → (page_id, code 비어있는지) 매핑
+                existing: dict[str, dict] = {}
+                for row in rows:
+                    title_arr = (
+                        row.get("properties", {})
+                        .get(name_prop, {})
+                        .get("title", [])
+                    )
+                    text = "".join(
+                        t.get("plain_text", "") for t in title_arr
+                    ).strip()
+                    if not text:
+                        continue
+                    code_rt = (
+                        row.get("properties", {})
+                        .get(code_prop, {})
+                        .get("rich_text", [])
+                    )
+                    code_val = "".join(
+                        t.get("plain_text", "") for t in code_rt
+                    ).strip()
+                    existing[text] = {
+                        "page_id": row["id"],
+                        "has_code": bool(code_val),
+                    }
+
+                for p in projects:
+                    name = (p.get("name") or "").strip()
+                    if not name:
+                        continue
+                    code = (p.get("project_code") or "").strip()
+                    if name in existing:
+                        skipped.append(name)
+                        # 기존 페이지의 Code 가 비어 있으면 채워줌 (본문은 안 건드림)
+                        info = existing[name]
+                        if code and not info["has_code"]:
+                            await nc.update_page(
+                                info["page_id"],
+                                properties={
+                                    code_prop: notion_module.text_prop(code),
+                                },
+                            )
+                            code_backfilled.append(name)
+                            info["has_code"] = True
+                        continue
+                    properties = {
+                        name_prop: notion_module.title_prop(name),
+                    }
+                    work_type = (p.get("work_type") or "").strip()
+                    if work_type:
+                        properties[worktype_prop] = notion_module.select_prop(
+                            work_type,
+                        )
+                    if code:
+                        properties[code_prop] = notion_module.text_prop(code)
+                    await nc.create_page(
+                        database_id=db_id, properties=properties,
+                    )
+                    added.append(name)
+                    existing[name] = {"page_id": "", "has_code": bool(code)}
+        except notion_module.NotionError as exc:
+            db_module.log_action(
+                conn, "notion-projects", "all", "fail", str(exc),
+            )
+            raise HTTPException(502, str(exc)) from exc
+
+        db_module.log_action(
+            conn, "notion-projects", "all", "ok",
+            f"added={len(added)} skipped={len(skipped)} "
+            f"code_backfilled={len(code_backfilled)}",
+        )
+        return {
+            "added": added,
+            "skipped_count": len(skipped),
+            "code_backfilled": code_backfilled,
+            "total": len(projects),
+        }
+
+    @app.post("/api/actions/notion-sync")
+    async def action_notion_sync(
+        payload: NotionSyncInput, conn=Depends(get_conn),
+    ) -> dict:
+        from fastapi import HTTPException
+
+        database_id = (
+            db_module.get_setting(conn, "notion.database_id") or ""
+        ).strip()
+        if not database_id:
+            raise HTTPException(400, "notion.database_id 가 설정에 없습니다")
+        token = _notion_keychain().get()
+        if not token:
+            raise HTTPException(
+                400, "Notion 토큰이 키체인에 없습니다. 설정 페이지에서 저장하세요.",
+            )
+
+        prop_title = db_module.get_setting(conn, "notion.prop_title") or "Name"
+        prop_date = db_module.get_setting(conn, "notion.prop_date") or "Date"
+        prop_project = (
+            db_module.get_setting(conn, "notion.prop_project") or "Project"
+        )
+        prop_worktype = (
+            db_module.get_setting(conn, "notion.prop_worktype") or "WorkType"
+        )
+        prop_hours = (
+            db_module.get_setting(conn, "notion.prop_hours") or "Hours"
+        )
+        prop_category = (
+            db_module.get_setting(conn, "notion.prop_category") or "Category"
+        )
+
+        # 주의 모든 날짜·엔트리 수집 + 카테고리→프로젝트 매핑 lookup
+        week_days = db_module.get_week(conn, payload.week_iso)
+        rows: list[dict] = []
+        for day in week_days:
+            for e in day["entries"]:
+                mapping = db_module.get_mapping(conn, e["category"]) or {}
+                project_name = mapping.get("project_name") or ""
+                work_type = mapping.get("project_work_type") or ""
+                rows.append({
+                    "date": day["date"],
+                    "category": e["category"],
+                    "hours": float(e["hours"]),
+                    "body_md": e.get("body_md", ""),
+                    "project_name": project_name,
+                    "work_type": work_type,
+                })
+
+        if payload.dry_run:
+            return {"rows": rows, "synced": 0}
+
+        created = 0
+        updated = 0
+        try:
+            async with notion_module.NotionClient(token) as nc:
+                for r in rows:
+                    title = f"{r['date']} · {r['category']}"
+                    properties = {
+                        prop_title: notion_module.title_prop(title),
+                        prop_date: notion_module.date_prop(r["date"]),
+                        prop_category: notion_module.text_prop(r["category"]),
+                        prop_hours: notion_module.number_prop(r["hours"]),
+                        prop_project: notion_module.select_prop(
+                            r["project_name"],
+                        ),
+                        prop_worktype: notion_module.select_prop(
+                            r["work_type"],
+                        ),
+                    }
+                    children = (
+                        [notion_module.code_block(r["body_md"])]
+                        if r["body_md"].strip() else []
+                    )
+
+                    # 중복 검사: 같은 (date, category) 행 존재 시 update
+                    existing = await nc.query_database(
+                        database_id,
+                        filter=notion_module.filter_by_date_and_category(
+                            date_prop_name=prop_date, date_iso=r["date"],
+                            category_prop_name=prop_category,
+                            category=r["category"],
+                        ),
+                    )
+                    if existing:
+                        page_id = existing[0]["id"]
+                        await nc.update_page(page_id, properties=properties)
+                        await nc.replace_page_children(
+                            page_id, children=children,
+                        )
+                        updated += 1
+                    else:
+                        await nc.create_page(
+                            database_id=database_id,
+                            properties=properties,
+                            children=children,
+                        )
+                        created += 1
+        except notion_module.NotionError as exc:
+            db_module.log_action(
+                conn, "notion", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(502, str(exc)) from exc
+
+        # ─── 주간 메모(week_note) → Week Summary DB ──────────
+        week_enabled = (
+            db_module.get_setting(conn, "notion.week_enabled") or "false"
+        ).strip().lower() == "true"
+        week_db_id = (
+            db_module.get_setting(conn, "notion.week_db_id") or ""
+        ).strip()
+        week_synced = False
+        week_action = ""
+        if week_enabled and week_db_id:
+            try:
+                week_synced, week_action = await _sync_notion_week(
+                    conn=conn,
+                    token=token,
+                    week_iso=payload.week_iso,
+                    week_db_id=week_db_id,
+                )
+            except notion_module.NotionError as exc:
+                db_module.log_action(
+                    conn, "notion", payload.week_iso, "fail",
+                    f"week sync: {exc}",
+                )
+                raise HTTPException(502, f"week sync: {exc}") from exc
+
+        db_module.log_action(
+            conn, "notion", payload.week_iso, "ok",
+            f"created={created} updated={updated} week={week_action or 'skip'}",
+        )
+        return {
+            "created": created, "updated": updated, "total": len(rows),
+            "week_synced": week_synced, "week_action": week_action,
+        }
 
     @app.post("/api/actions/timesheet-submit")
     async def action_timesheet_submit(

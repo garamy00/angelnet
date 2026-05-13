@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name TEXT NOT NULL,
     work_type TEXT NOT NULL DEFAULT '',
     remote_id TEXT,
+    project_code TEXT NOT NULL DEFAULT '',
     active INTEGER NOT NULL DEFAULT 1,
     UNIQUE(name, work_type)
 );
@@ -119,7 +120,19 @@ def init_schema(conn: sqlite3.Connection) -> None:
     """스키마를 초기화한다 (멱등) + 필요 시 in-place migration 수행."""
     conn.executescript(SCHEMA)
     _migrate_projects_add_work_type(conn)
+    _migrate_projects_add_project_code(conn)
     conn.commit()
+
+
+def _migrate_projects_add_project_code(conn: sqlite3.Connection) -> None:
+    """기존 projects 에 project_code 컬럼이 없으면 추가 (단순 ALTER)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(projects)")}
+    if "project_code" in cols:
+        return
+    conn.execute(
+        "ALTER TABLE projects ADD COLUMN project_code TEXT NOT NULL DEFAULT ''",
+    )
+    logger.info("Migrated projects table: added project_code column")
 
 
 def _migrate_projects_add_work_type(conn: sqlite3.Connection) -> None:
@@ -239,11 +252,13 @@ def create_project(
     name: str,
     remote_id: str | None = None,
     work_type: str = "",
+    project_code: str = "",
 ) -> int:
     """프로젝트를 생성하고 id 반환. (name, work_type) 중복은 IntegrityError."""
     cur = conn.execute(
-        "INSERT INTO projects(name, work_type, remote_id) VALUES(?, ?, ?)",
-        (name, work_type, remote_id),
+        "INSERT INTO projects(name, work_type, remote_id, project_code) "
+        "VALUES(?, ?, ?, ?)",
+        (name, work_type, remote_id, project_code),
     )
     conn.commit()
     return cur.lastrowid
@@ -253,11 +268,25 @@ def list_projects(
     conn: sqlite3.Connection, *, active_only: bool = False
 ) -> list[dict[str, Any]]:
     """프로젝트 목록을 반환한다. (name, work_type) 알파벳 순."""
-    sql = "SELECT id, name, work_type, remote_id, active FROM projects"
+    sql = (
+        "SELECT id, name, work_type, remote_id, project_code, active "
+        "FROM projects"
+    )
     if active_only:
         sql += " WHERE active = 1"
     sql += " ORDER BY name, work_type"
     return [dict(r) for r in conn.execute(sql).fetchall()]
+
+
+def update_project_code(
+    conn: sqlite3.Connection, *, project_id: int, project_code: str,
+) -> None:
+    """프로젝트의 project_code 만 업데이트."""
+    conn.execute(
+        "UPDATE projects SET project_code = ? WHERE id = ?",
+        (project_code, project_id),
+    )
+    conn.commit()
 
 
 def count_project_mapping_usage(

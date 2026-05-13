@@ -20,13 +20,9 @@
 
 * { box-sizing: border-box; }
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-size: 13px;
-}
+/* body 글꼴·크기·배경은 main.css 의 통합 정의를 그대로 사용한다.
+   과거에 style.css 가 body 를 덮어쓰면서 한글 글꼴이 빠지고 글자 크기가 13px 로
+   축소되어 다른 페이지와 톤이 어긋났던 문제 → main.css 단일 출처로 통일. */
 
 /* .app-header / .app-title / .app-user 는 통합 nav 로 대체됨 (main.css 참조). */
 

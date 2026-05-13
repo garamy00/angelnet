@@ -19,6 +19,17 @@
   <main>
     <section>
       <h2>UpNote</h2>
+      <p class="muted">
+        UpNote 동기화는 macOS 의 <code>upnote://</code> URL 로 본인 컴퓨터의 UpNote 앱을
+        호출해 새 노트를 만드는 방식입니다. 별도 계정/API 키 설정이 없으며,
+        앱에 로그인된 본인 계정의 로컬 노트북에 자동 저장됩니다.
+        (외부 서버로 전송되지 않음)
+      </p>
+      <label>UpNote 동기화 사용
+        <input id="upnote-enabled" type="checkbox">
+      </label>
+      <p class="muted">체크 해제 시 메인 페이지의 <b>🔄 UpNote 저장 (주)</b> 버튼이 숨겨집니다.</p>
+
       <label>노트북 이름
         <input id="notebook-id" type="text" placeholder="### 일일 업무 보고 ###">
       </label>
@@ -43,6 +54,123 @@
         </select>
       </label>
       <p class="muted">UpNote 의 <code>markdown</code> 파라미터. 일부 버전에서는 false 라도 자체 변환이 적용될 수 있으니, 결과가 어색하면 위 "코드 블록으로 감싸기" 도 체크하세요.</p>
+    </section>
+
+    <section>
+      <h2>Notion</h2>
+      <p class="muted">
+        Notion 의 Database 1개에 <b>엔트리(카테고리) 1개당 1행</b> 으로 동기화합니다.
+        UpNote 와 달리 동일 (날짜·카테고리) 행은 자동 업데이트되어 중복이 생기지
+        않습니다. UpNote 와 함께 사용해도 되고, Notion 만 사용해도 됩니다.
+      </p>
+      <label>Notion 동기화 사용
+        <input id="notion-enabled" type="checkbox">
+      </label>
+      <p class="muted">체크 해제 시 메인 페이지의 <b>🔄 Notion 동기화 (주)</b> 버튼이 숨겨집니다.</p>
+
+      <label>Integration Token
+        <input id="notion-token" type="password"
+               placeholder="secret_xxxxxxxx (저장된 경우 공란 유지)">
+      </label>
+      <p class="muted">
+        <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener">
+          notion.so/my-integrations
+        </a> 에서 Internal Integration 생성 후 받은 token. 비밀번호처럼
+        macOS Keychain (service=<code>angeldash-notion</code>) 에 저장되며
+        화면에 다시 표시되지 않습니다. 토큰을 지우려면 빈 값으로 저장.
+      </p>
+      <p id="notion-token-status" class="muted"></p>
+
+      <label>Database ID
+        <input id="notion-database-id" type="text"
+               placeholder="abc123… (32자, 대시 포함/제외 모두 가능)">
+      </label>
+      <p class="muted">
+        Notion Database 페이지 URL 끝의 UUID. Database 메뉴(<code>···</code>) →
+        Connections 에서 위 Integration 을 연결해야 동기화가 가능합니다.
+        DB 의 properties 는 아래 이름과 일치해야 합니다 (기본값 그대로 쓰는 걸 권장):
+      </p>
+
+      <details>
+        <summary>Property 이름 커스터마이즈</summary>
+        <label>Title property
+          <input id="notion-prop-title" type="text" placeholder="Name">
+        </label>
+        <label>Date property
+          <input id="notion-prop-date" type="text" placeholder="Date">
+        </label>
+        <label>Project property (Select)
+          <input id="notion-prop-project" type="text" placeholder="Project">
+        </label>
+        <label>WorkType property (Select)
+          <input id="notion-prop-worktype" type="text" placeholder="WorkType">
+        </label>
+        <label>Hours property (Number)
+          <input id="notion-prop-hours" type="text" placeholder="Hours">
+        </label>
+        <label>Category property (Text)
+          <input id="notion-prop-category" type="text" placeholder="Category">
+        </label>
+      </details>
+
+      <h3>Projects (프로젝트 목록 push)</h3>
+      <p class="muted">
+        AngelDash 의 <b>등록된 프로젝트</b> 목록을 Notion 의 별도 DB 에
+        1프로젝트=1페이지로 push 합니다. <b>신규 항목만 추가</b>되고
+        기존 페이지는 그대로 유지되므로, Notion 에서 wiki 처럼 작성한 내용이
+        보존됩니다. 프로젝트 페이지에서 <b>🔄 Notion 업데이트</b> 클릭으로 실행.
+        Database 의 properties: <code>Name</code>(Title) — 그 외 <code>WorkType</code>(Select)
+        있으면 자동 채움.
+      </p>
+      <label>Projects 동기화 사용
+        <input id="notion-projects-enabled" type="checkbox">
+      </label>
+      <label>Projects Database ID
+        <input id="notion-projects-db-id" type="text"
+               placeholder="별도 Database 의 UUID">
+      </label>
+      <details>
+        <summary>Projects property 이름 커스터마이즈</summary>
+        <label>Title property
+          <input id="notion-projects-prop-name" type="text" placeholder="Name">
+        </label>
+        <label>WorkType property (Select, 선택)
+          <input id="notion-projects-prop-worktype" type="text" placeholder="WorkType">
+        </label>
+        <label>Code property (Text, 회사 시스템 프로젝트 코드)
+          <input id="notion-projects-prop-code" type="text" placeholder="Code">
+        </label>
+      </details>
+      <p class="muted">
+        <b>Code</b> 컬럼은 회사 타임시트의 task ID (<code>remote_id</code>) 가
+        들어갑니다. 기존 페이지의 Code 가 비어 있으면 자동으로 채워주고
+        (본문은 절대 안 건드림), 이미 값이 있으면 유지합니다.
+      </p>
+
+      <h3>Week Summary (주간 메모 동기화)</h3>
+      <p class="muted">
+        엔트리 동기화와 별개로, 메인 페이지의 <b>📝 이번 주 메모</b> 를
+        별도의 Notion Database 에 주별 1행으로 저장합니다.
+        같은 주(<code>YYYY-Www</code>) 행은 자동 업데이트되고, 메모가 비어
+        있으면 동기화를 건너뜁니다. Database 의 properties: <code>Week</code>(Title),
+        <code>Date</code>(Date). 본문은 page content 에 코드블록으로 삽입.
+      </p>
+      <label>Week Summary 동기화 사용
+        <input id="notion-week-enabled" type="checkbox">
+      </label>
+      <label>Week Summary Database ID
+        <input id="notion-week-db-id" type="text"
+               placeholder="별도 Database 의 UUID (엔트리 DB 와 다른 ID)">
+      </label>
+      <details>
+        <summary>Week property 이름 커스터마이즈</summary>
+        <label>Title property
+          <input id="notion-week-prop-title" type="text" placeholder="Week">
+        </label>
+        <label>Date property
+          <input id="notion-week-prop-date" type="text" placeholder="Date">
+        </label>
+      </details>
     </section>
 
     <section>

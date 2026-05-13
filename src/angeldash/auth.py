@@ -50,6 +50,25 @@ class KeychainStore:
             return None
         return result.stdout.strip() or None
 
+    def delete(self) -> None:
+        """저장된 항목을 삭제한다. 없으면 무시."""
+        subprocess.run(
+            [
+                "security",
+                "delete-generic-password",
+                "-s",
+                self.service,
+                "-a",
+                self.account,
+            ],
+            capture_output=True,
+            check=False,
+        )
+        logger.info(
+            "Keychain entry deleted: service=%s account=%s",
+            self.service, self.account,
+        )
+
     def save(self, password: str) -> None:
         """패스워드를 저장(또는 덮어쓰기)한다. 실패 시 RuntimeError."""
         result = subprocess.run(

@@ -31,19 +31,27 @@
 
     <section class="week-notes">
       <h3>📝 이번 주 메모 (UpNote 동기화에만 포함)</h3>
-      <textarea id="week-note" placeholder="자유 메모…"></textarea>
+      <textarea class="meta-misc" id="week-note" placeholder="자유 메모…"></textarea>
     </section>
 
     <section class="actions-bar">
-      <span>타임시트 대상:</span>
-      <select id="target">
-        <option value="week">이번 주 전체</option>
-        <option value="today">오늘만</option>
-      </select>
-      <button class="primary" id="btn-report" title="오늘 날짜만 복사">📋 팀장 보고 복사 (오늘)</button>
-      <button class="primary" id="btn-timesheet">📤 타임시트 입력</button>
-      <button id="btn-verify" title="회사 시스템 시간과 비교">🔍 타임시트 확인</button>
-      <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성">🔄 UpNote 저장 (주)</button>
+      <div class="action-group">
+        <span class="group-label">타임시트 대상:</span>
+        <select id="target">
+          <option value="week">이번 주 전체</option>
+          <option value="today">오늘만</option>
+        </select>
+        <button class="primary" id="btn-timesheet">📤 타임시트 입력</button>
+        <button id="btn-verify" title="회사 시스템 시간과 비교">🔍 타임시트 확인</button>
+      </div>
+
+      <div class="action-group">
+        <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성">🔄 UpNote 저장 (주)</button>
+      </div>
+
+      <div class="action-group">
+        <button class="primary" id="btn-notion" title="이번 주 엔트리를 Notion DB 에 동기화 (중복 시 업데이트)">🔄 Notion 동기화 (주)</button>
+      </div>
     </section>
   </main>
   <script type="module" src="/static/js/main.js"></script>

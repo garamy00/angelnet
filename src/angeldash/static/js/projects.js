@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete, toast } from './api.js';
+import { apiGet, apiPost, apiPut, apiDelete, toast, flash, startProgress } from './api.js';
 
 const AUTO_TASK_OPTIONS = ['개발', '시험/지원', '영업'];
 const AUTO_TASK_DEFAULT = '개발';
@@ -269,7 +269,10 @@ function renderRemoteTasks(tasks) {
         btn.disabled = true;
         try {
           await apiPost('/api/projects', {
-            name: t.name, remote_id: t.name, work_type: wt,
+            name: t.name,
+            remote_id: t.task_id,
+            project_code: t.project_code || '',
+            work_type: wt,
           });
           toast(`등록됨: ${labelPlain}`);
           li.innerHTML = `<span>${escapeHtml(t.name)}</span> ${wtTag} ${meta} <span class="muted">✓ 등록됨</span>`;
@@ -302,6 +305,30 @@ document.getElementById('add-pattern').addEventListener('click', async () => {
     toast(`패턴 추가됨: ${pattern}`);
   } catch (e) {
     toast(`실패: ${e.message}`, 'fail');
+  }
+});
+
+// Notion Projects 업데이트 버튼
+document.getElementById('btn-notion-projects').addEventListener('click', async () => {
+  if (!confirm('등록된 프로젝트 목록을 Notion DB 로 push 합니다.\n신규 항목만 추가되고, 기존 페이지는 그대로 유지됩니다.\n계속하시겠습니까?')) return;
+  const p = startProgress('Notion Projects 업데이트 중…');
+  try {
+    const r = await apiPost('/api/actions/notion-projects-sync', {});
+    p.close();
+    const addedList = r.added.length
+      ? '\n추가된 항목:\n  - ' + r.added.join('\n  - ')
+      : '';
+    const backfilled = (r.code_backfilled || []).length;
+    const backfillLine = backfilled
+      ? `\nCode 보강 ${backfilled} (기존 페이지의 빈 Code 채움)`
+      : '';
+    flash(
+      `Notion Projects 업데이트 완료\n신규 추가 ${r.added.length} / 기존 유지 ${r.skipped_count} (총 ${r.total})${backfillLine}${addedList}`,
+      'ok',
+    );
+  } catch (e) {
+    p.close();
+    flash(`Notion Projects 업데이트 실패\n${e.message}`, 'fail', 0);
   }
 });
 

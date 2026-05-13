@@ -1,7 +1,7 @@
 import {
   apiGet, apiPut, apiPost,
   isoWeek, weekDates, formatDateLabel,
-  debounce, toast,
+  debounce, toast, flash, startProgress,
 } from './api.js';
 
 let currentWeek = isoWeek(new Date());
@@ -13,6 +13,21 @@ async function loadMe() {
     document.getElementById('user-label').textContent = `${me.name}(${me.user_id})`;
   } catch (e) {
     document.getElementById('user-label').textContent = '(로그인 실패)';
+  }
+}
+
+async function applySyncToggles() {
+  try {
+    const s = await apiGet('/api/settings');
+    const upnoteOn = (s['upnote.enabled'] ?? 'true').toString().toLowerCase() === 'true';
+    const notionOn = (s['notion.enabled'] ?? 'false').toString().toLowerCase() === 'true';
+    const upBtn = document.getElementById('btn-upnote');
+    const noBtn = document.getElementById('btn-notion');
+    // inline display 로 강제 (hidden 속성이 flex 컨테이너의 다른 룰에 의해 무시되는 케이스 회피)
+    upBtn.style.display = upnoteOn ? '' : 'none';
+    noBtn.style.display = notionOn ? '' : 'none';
+  } catch (e) {
+    console.error('sync toggles fetch failed', e);
   }
 }
 
@@ -91,6 +106,8 @@ function updateExcelButtonLabel() {
 function renderDay(day, vacations, holiday) {
   const wrap = document.createElement('div');
   wrap.className = 'day-block';
+  const isToday = day.date === todayLocalIso();
+  if (isToday) wrap.classList.add('day-block--today');
   if (holiday) wrap.classList.add('day-block--holiday');
   wrap.dataset.date = day.date;
   // 휴가 시간은 updateDayTotals 에서 entries 합과 함께 더해 합계에 반영한다.
@@ -105,10 +122,22 @@ function renderDay(day, vacations, holiday) {
   const holLabel = holiday
     ? ` <span class="holiday-tag">🎌 ${escapeHtml(holiday.label)}</span>`
     : '';
-  header.innerHTML = `<span>${formatDateLabel(day.date)}${holLabel}${vacLabel}</span>`;
+  const todayBadge = isToday ? ' <span class="today-tag">오늘</span>' : '';
+  header.innerHTML = `<span>${formatDateLabel(day.date)}${todayBadge}${holLabel}${vacLabel}</span>`;
+  const right = document.createElement('span');
+  right.className = 'day-header-right';
+  if (isToday) {
+    const reportBtn = document.createElement('button');
+    reportBtn.className = 'btn-day-report';
+    reportBtn.title = '오늘 보고 클립보드에 복사';
+    reportBtn.textContent = '📋 팀장 보고 복사';
+    reportBtn.addEventListener('click', () => doTeamReportCopy(day.date));
+    right.appendChild(reportBtn);
+  }
   const totals = document.createElement('span');
   totals.className = 'totals';
-  header.appendChild(totals);
+  right.appendChild(totals);
+  header.appendChild(right);
   wrap.appendChild(header);
 
   // 휴가는 read-only row 로 entries 위에 표시
@@ -124,6 +153,7 @@ function renderDay(day, vacations, holiday) {
   }
 
   const addBtn = document.createElement('button');
+  addBtn.className = 'add-entry-btn';
   addBtn.textContent = '+ 카테고리 추가';
   addBtn.addEventListener('click', () => {
     wrap.insertBefore(renderEntry({ category: '', hours: 0, body_md: '' }), addBtn);
@@ -321,25 +351,46 @@ function shiftWeek(weekIso, delta) {
   return isoWeek(monday);
 }
 
-// 팀장 보고는 항상 '오늘' 만 — '대상' 드롭다운과 무관
-document.getElementById('btn-report').addEventListener('click', async () => {
+// 팀장 보고 복사 — renderDay 의 오늘 박스 헤더 버튼에서 호출
+async function doTeamReportCopy(dateIso) {
   try {
-    const today = todayLocalIso();
-    const r = await apiPost('/api/actions/team-report', { date: today });
+    const r = await apiPost('/api/actions/team-report', { date: dateIso });
     await navigator.clipboard.writeText(r.text);
-    toast(`팀장 보고 (${today}) 가 클립보드에 복사되었습니다`);
+    toast(`팀장 보고 (${dateIso}) 가 클립보드에 복사되었습니다`);
   } catch (e) {
-    toast(`실패: ${e.message}`, 'fail');
+    flash(`팀장 보고 복사 실패\n${e.message}`, 'fail', 0);
+  }
+}
+
+document.getElementById('btn-upnote').addEventListener('click', async () => {
+  if (!confirm(`이번 주(${currentWeek}) UpNote 노트를 생성합니다. 같은 주의 기존 노트는 자동 삭제되지 않습니다. 계속하시겠습니까?`)) return;
+  const p = startProgress(`UpNote 노트 생성 중… (${currentWeek})`);
+  try {
+    await apiPost('/api/actions/upnote-sync', { week_iso: currentWeek });
+    p.close();
+    flash('UpNote 에 노트가 생성되었습니다', 'ok');
+  } catch (e) {
+    p.close();
+    flash(`UpNote 저장 실패\n${e.message}`, 'fail', 0);
   }
 });
 
-document.getElementById('btn-upnote').addEventListener('click', async () => {
+document.getElementById('btn-notion').addEventListener('click', async () => {
+  if (!confirm(`이번 주(${currentWeek}) 엔트리들을 Notion DB 에 동기화합니다. 같은 (날짜·카테고리) 행은 자동 업데이트됩니다. 계속하시겠습니까?`)) return;
+  const p = startProgress(`Notion 동기화 중… (${currentWeek})`);
   try {
-    if (!confirm(`이번 주(${currentWeek}) UpNote 노트를 생성합니다. 같은 주의 기존 노트는 자동 삭제되지 않습니다. 계속하시겠습니까?`)) return;
-    await apiPost('/api/actions/upnote-sync', { week_iso: currentWeek });
-    toast('UpNote 에 노트가 생성되었습니다');
+    const r = await apiPost('/api/actions/notion-sync', { week_iso: currentWeek });
+    p.close();
+    const weekLine = r.week_action && r.week_action !== 'skipped(empty)'
+      ? `\nWeek Summary: ${r.week_action}`
+      : (r.week_action === 'skipped(empty)' ? '\nWeek Summary: 메모 비어있어 건너뜀' : '');
+    flash(
+      `Notion 동기화 완료\n생성 ${r.created} / 갱신 ${r.updated} (총 ${r.total})${weekLine}`,
+      'ok',
+    );
   } catch (e) {
-    toast(`실패: ${e.message}`, 'fail');
+    p.close();
+    flash(`Notion 동기화 실패\n${e.message}`, 'fail', 0);
   }
 });
 
@@ -531,5 +582,6 @@ document.getElementById('btn-excel').addEventListener('click', async () => {
 
 (async () => {
   await loadMe();
+  await applySyncToggles();
   await loadWeek();
 })();

@@ -73,7 +73,8 @@ class Project(BaseModel):
     # 회사 시스템의 work_type (예: '개발', '시험/지원', '영업', '세미나').
     # 같은 프로젝트명에 여러 task 가 등록될 수 있으므로 구분 키.
     work_type: str = ""
-    remote_id: str | None = None
+    remote_id: str | None = None  # 회사 jobtime 의 task_id (숫자 string)
+    project_code: str = ""  # 회사 프로젝트 관리의 code (예: 'cNPDBu2604')
     active: bool = True
 
 
@@ -81,6 +82,7 @@ class ProjectInput(BaseModel):
     name: str = Field(min_length=1)
     work_type: str = ""
     remote_id: str | None = None
+    project_code: str = ""
     active: bool = True
 
 
