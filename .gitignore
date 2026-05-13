@@ -28,8 +28,8 @@ meeting_page.html
 # 관련 없는 서브프로젝트
 graphql-test/
 
-# 회의실 매핑 (사용자 환경 전용 — rooms.example.py 를 참고해 본인 환경에 맞게 작성)
-src/angeldash/rooms.py
+# 회의실 매핑 (사용자 환경 전용 — rooms/registry.example.py 를 참고해 본인 환경에 맞게 작성)
+src/angeldash/rooms/registry.py
 
 # 디자인 검토용 목업 (공개 배포 제외)
 src/angeldash/static/month-mockup.html

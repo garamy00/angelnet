@@ -21,7 +21,7 @@ from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from ._common.models import User
 from .client import AngelNetClient
 from .models import Reservation, ReservationCreate
-from .rooms import ROOMS, list_rooms_on_floor
+from .rooms.registry import ROOMS, list_rooms_on_floor
 from .timesheet import db as ts_db
 from .timesheet import routes as ts_routes
 from .timesheet.client import TimesheetClient

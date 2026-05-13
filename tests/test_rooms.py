@@ -1,6 +1,6 @@
 """rooms 모듈 단위 테스트."""
 
-from angeldash.rooms import ROOMS, get_room_name, list_rooms_on_floor
+from angeldash.rooms.registry import ROOMS, get_room_name, list_rooms_on_floor
 
 
 def test_get_room_name_known_id_returns_korean_name():
