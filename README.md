@@ -60,50 +60,6 @@ export ANGELNET_USER=youruserid   # 첫 실행 전 1회 (~/.zshrc 등에 영구 
 | `ANGELDASH_HOST` | `127.0.0.1` | 서버 바인딩 호스트 (로컬 전용). 사내 다른 사람도 접근시키려면 `0.0.0.0` |
 | `ANGELDASH_PORT` | `5173` | 서버 포트 |
 
-## 보안
-
-- 서버는 기본 `0.0.0.0` 으로 모든 인터페이스에 listen — **외부(사내 네트워크) 접근 허용**.
-  로컬 전용으로 회귀하려면 `export ANGELDASH_HOST=127.0.0.1`
-- ⚠️ 외부에서 접속하는 사람은 **호스트 본인의 AngelNet 권한** 으로 예약/조회/삭제 가능.
-  공용 와이파이/공유기·VPN 미접속 환경에서 노출하지 말 것
-- 패스워드는 Keychain 또는 환경변수로만 보관, 코드/로그에 평문 출력 없음
-- HTTPS 인증서 검증은 비활성(기존 bash 동작과 동일). 운영 환경 인증서가 적절히 갱신되면
-  `client.py` 의 `verify=False` 를 제거할 것 (TODO)
-
-### macOS 방화벽
-
-기본적으로 macOS 방화벽이 켜져 있으면 첫 `./angel` 실행 시 시스템 대화상자
-"Python.app 이 들어오는 네트워크 연결을 수락하시겠습니까?" 가 한 번 뜬다. **허용** 을
-누르면 그 다음부터 자동으로 외부 접근 가능.
-
-방화벽이 꺼져 있거나 이미 허용한 경우 별도 작업 불필요. 수동 확인:
-
-```bash
-# 방화벽 상태
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
-
-# 들어오는 연결 허용 (필요한 경우)
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$(which python3)"
-sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(which python3)"
-```
-
-### 외부 접근 URL
-
-`./angel` 실행 시 출력되는 `External access: http://<IP>:5173` 의 IP 로 동일
-네트워크 사용자가 접속 가능. IP 가 비어 있으면 `ipconfig getifaddr en0` (Wi-Fi)
-또는 `ipconfig getifaddr en1` (이더넷) 으로 직접 확인.
-
-## 개발
-
-```bash
-# 테스트
-.venv/bin/pytest -v
-
-# Lint / Format
-.venv/bin/ruff check src tests
-.venv/bin/ruff format src tests
-```
-
 ## 트러블슈팅
 
 | 증상 | 원인/대처 |
@@ -112,17 +68,6 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(which pytho
 | `auth` 401 | 패스워드 변경됨. Keychain Access 앱에서 angeldash 항목 삭제 후 재실행 |
 | `api` 401 in POST/DELETE /api/reservations | Timesheet 세션 만료 또는 서버 측 권한 변경. 프로세스 재시작으로 신선한 로그인 |
 | `boan` 또는 `php` 관련 메시지 | 기존 시스템 흔적. archive/ 의 bash 만 영향. 새 대시보드는 Spring REST 로 동작 |
-
-## 면책 / Disclaimer
-
-이 도구는 특정 회사 사내 시스템 (`timesheet.uangel.com`) 의 회의실 예약 API 를
-호출하도록 만들어졌다. 외부 환경에서는 동작하지 않는다. 회의실 데이터
-(`src/angeldash/rooms.py`) 는 본인 환경의 실제 회의실 ID 와 이름으로 직접
-작성해야 한다 — `rooms.example.py` 를 복사해서 사용하라.
-
-This tool targets a specific company's internal reservation system. It will not
-work outside that network. You must populate `src/angeldash/rooms.py` with your
-own room mappings (copy from `rooms.example.py`).
 
 ## 통합 수동 검증 (첫 실행)
 
