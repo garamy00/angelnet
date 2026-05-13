@@ -14,8 +14,8 @@ if [[ -z "${ANGELNET_USER:-}" ]]; then
 fi
 
 VENV="$SCRIPT_DIR/.venv"
-# 기본값 0.0.0.0: 외부(사내 네트워크) 접근 허용. 호스트 본인은 로컬 URL 로 열기.
-HOST="${ANGELDASH_HOST:-0.0.0.0}"
+# 기본값 127.0.0.1: 로컬 전용. 사내 다른 사람도 접근시키려면 ANGELDASH_HOST=0.0.0.0
+HOST="${ANGELDASH_HOST:-127.0.0.1}"
 PORT="${ANGELDASH_PORT:-5173}"
 URL="http://127.0.0.1:${PORT}"
 

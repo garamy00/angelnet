@@ -16,8 +16,8 @@ from .server import build_app
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 5173
-# 외부(사내 네트워크) 접근 허용 default. 로컬만 사용하려면 --host 127.0.0.1
-DEFAULT_HOST = "0.0.0.0"
+# 로컬 전용 default. 사내 다른 사람도 접근시키려면 --host 0.0.0.0
+DEFAULT_HOST = "127.0.0.1"
 
 
 def _ensure_password(user_id: str) -> str:

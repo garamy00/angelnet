@@ -57,7 +57,7 @@ export ANGELNET_USER=youruserid   # 첫 실행 전 1회 (~/.zshrc 등에 영구 
 |---|---|---|
 | `ANGELNET_USER` | (없음, 필수) | AngelNet 사용자 ID |
 | `ANGELNET_PWD` | (없음) | 패스워드 (있으면 Keychain 보다 우선) |
-| `ANGELDASH_HOST` | `0.0.0.0` | 서버 바인딩 호스트 (모든 인터페이스). 로컬만 허용은 `127.0.0.1` |
+| `ANGELDASH_HOST` | `127.0.0.1` | 서버 바인딩 호스트 (로컬 전용). 사내 다른 사람도 접근시키려면 `0.0.0.0` |
 | `ANGELDASH_PORT` | `5173` | 서버 포트 |
 
 ## 보안
