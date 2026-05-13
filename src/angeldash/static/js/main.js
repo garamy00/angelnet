@@ -343,10 +343,15 @@ document.getElementById('btn-upnote').addEventListener('click', async () => {
   }
 });
 
+// btn-verify 버튼과 btn-timesheet 입력 후 자동 호출에서 공용으로 쓰는 verify 핵심 로직.
+async function runTimesheetVerify() {
+  const data = await apiGet(`/api/timesheet/verify?week_iso=${currentWeek}`);
+  applyVerifyResult(data.items);
+}
+
 document.getElementById('btn-verify').addEventListener('click', async () => {
   try {
-    const data = await apiGet(`/api/timesheet/verify?week_iso=${currentWeek}`);
-    applyVerifyResult(data.items);
+    await runTimesheetVerify();
     toast('타임시트 확인 완료');
   } catch (e) {
     toast(`실패: ${e.message}`, 'fail');
@@ -493,6 +498,12 @@ document.getElementById('btn-timesheet').addEventListener('click', async () => {
     const real = await apiPost('/api/actions/timesheet-submit',
       { ...body, dry_run: false });
     toast(`타임시트 입력 완료 (${(real.results || []).length}건)`);
+    // 입력 직후 회사 시스템과의 정합성을 즉시 badge 로 표시 (조용히 실행)
+    try {
+      await runTimesheetVerify();
+    } catch (e) {
+      toast(`자동 확인 실패: ${e.message}`, 'fail');
+    }
   } catch (e) {
     toast(`실패: ${e.message}`, 'fail');
   }
