@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>로그 — AngelDash</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">📅 일일업무보고</a>
+      <a href="/projects.html">🗂 프로젝트</a>
+      <a href="/rooms.html">🗓 회의실예약</a>
+      <a href="/vacation.html">🏖 휴가조회</a>
+      <a href="/logs.html" class="active">📋 로그</a>
+      <a href="/settings.html">⚙️ 설정</a>
+    </nav>
+  </header>
+  <main>
+    <h2>최근 동작 로그 (90일)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>시각</th><th>종류</th><th>대상</th><th>상태</th><th>메시지</th>
+        </tr>
+      </thead>
+      <tbody id="logs-tbody"></tbody>
+    </table>
+  </main>
+  <script type="module" src="/static/js/logs.js"></script>
+</body>
+</html>

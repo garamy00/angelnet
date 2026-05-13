@@ -28,17 +28,7 @@ body {
   font-size: 13px;
 }
 
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  background: var(--color-panel);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.app-title { font-size: 16px; font-weight: 600; }
-.app-user { display: flex; gap: 12px; align-items: center; }
+/* .app-header / .app-title / .app-user 는 통합 nav 로 대체됨 (main.css 참조). */
 
 .controls {
   display: flex;

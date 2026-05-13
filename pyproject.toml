@@ -1,13 +1,14 @@
 [project]
 name = "angeldash"
-version = "0.1.0"
-description = "AngelNet 회의실 예약 로컬 대시보드"
+version = "0.2.0"
+description = "AngelNet 사내 통합 대시보드 — 회의실 예약 + 일일보고/타임시트/UpNote"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",
     "pydantic>=2.9",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]

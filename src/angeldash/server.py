@@ -1,4 +1,8 @@
-"""FastAPI app: REST 라우터, 정적 파일 서빙, 의존성 주입."""
+"""FastAPI app: 회의실 + 타임시트 통합 라우트, 정적 파일 서빙, 의존성 주입.
+
+단일 포트(5173) 에서 두 서브시스템(회의실 / 보고서·타임시트·UpNote) 을 함께 호스팅.
+lifespan 안에서 두 client(AngelNetClient, TimesheetClient) 모두 login.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,9 @@ from .client import AngelNetClient
 from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .models import Reservation, ReservationCreate, User
 from .rooms import ROOMS, list_rooms_on_floor
+from .timesheet import db as ts_db
+from .timesheet import routes as ts_routes
+from .timesheet.client import TimesheetClient
 
 logger = logging.getLogger(__name__)
 
@@ -33,28 +40,61 @@ def get_password() -> str:
     raise RuntimeError("password not initialized")
 
 
-def build_app(user_id: str) -> FastAPI:
-    """FastAPI 앱을 생성한다. lifespan 안에서 client·password dependency 를 주입."""
+def build_app(
+    user_id: str,
+    *,
+    db_path: Path | str | None = None,
+    skip_lifespan_login: bool = False,
+) -> FastAPI:
+    """FastAPI 앱을 생성한다.
+
+    lifespan: 두 client(회의실/타임시트) login + 타임시트 DB 연결.
+    skip_lifespan_login=True 면 테스트에서 lifespan 의 네트워크/DB 자원 할당을 건너뛴다.
+    """
     keychain = KeychainStore(account=user_id)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        if skip_lifespan_login:
+            yield
+            return
+
         password = os.environ.get("ANGELNET_PWD") or keychain.get()
         if not password:
             raise RuntimeError(
                 "Password not found. Set ANGELNET_PWD or run 'angeldash init' first."
             )
-        client = AngelNetClient(user_id=user_id)
-        await client.login(password)
 
-        app.dependency_overrides[get_client] = lambda: client
+        rooms_client = AngelNetClient(user_id=user_id)
+        await rooms_client.login(password)
+
+        ts_client = TimesheetClient(user_id=user_id)
+        await ts_client.login(password)
+
+        conn = ts_db.connect(db_path) if db_path else ts_db.connect()
+        deleted = ts_db.cleanup_action_logs(conn, days=90)
+        if deleted:
+            logger.info("Cleaned up %d old action_log rows", deleted)
+
+        # 사용자 DB 에 과거 DEFAULT 가 그대로 저장돼 있으면 (= 미커스텀) 삭제하여
+        # 코드의 새 DEFAULT 가 적용되도록 한다.
+        from .timesheet.templates import OBSOLETE_DEFAULTS
+        ts_db.cleanup_obsolete_default_settings(conn, OBSOLETE_DEFAULTS)
+
+        app.dependency_overrides[get_client] = lambda: rooms_client
         app.dependency_overrides[get_password] = lambda: password
+        app.dependency_overrides[ts_routes.get_client] = lambda: ts_client
+        app.dependency_overrides[ts_routes.get_password] = lambda: password
+        app.dependency_overrides[ts_routes.get_conn] = lambda: conn
+
         try:
             yield
         finally:
-            await client.close()
+            await rooms_client.close()
+            await ts_client.close()
+            conn.close()
 
-    app = FastAPI(title="AngelNet 회의실 대시보드", lifespan=lifespan)
+    app = FastAPI(title="AngelDash — 통합 대시보드", lifespan=lifespan)
 
     # lifespan 에서 이미 login 호출됨. 여기서는 Spring 세션 캐시 히트로
     # 실제 네트워크 호출 없이 User 정보만 반환된다.
@@ -111,12 +151,37 @@ def build_app(user_id: str) -> FastAPI:
             password, event_id=event_id, event_date=event_date
         )
 
+    # 타임시트 / 보고서 / 프로젝트 / 로그 / 설정 라우트 등록
+    ts_routes.register_routes(app)
+
     # 1인 도구 + 정적 파일이 자주 변경 → 항상 fresh 받도록 캐시 무력화
     _NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
 
     @app.get("/")
     async def index() -> FileResponse:
+        # 기본 페이지: 일일업무보고
         return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
+
+    # 통합 nav 에서 가리키는 보조 페이지들
+    @app.get("/rooms.html")
+    async def rooms_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "rooms.html", headers=_NO_CACHE)
+
+    @app.get("/vacation.html")
+    async def vacation_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "vacation.html", headers=_NO_CACHE)
+
+    @app.get("/projects.html")
+    async def projects_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "projects.html", headers=_NO_CACHE)
+
+    @app.get("/logs.html")
+    async def logs_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "logs.html", headers=_NO_CACHE)
+
+    @app.get("/settings.html")
+    async def settings_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "settings.html", headers=_NO_CACHE)
 
     if STATIC_DIR.exists():
 

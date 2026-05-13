@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>휴가조회 — AngelDash</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">📅 일일업무보고</a>
+      <a href="/projects.html">🗂 프로젝트</a>
+      <a href="/rooms.html">🗓 회의실예약</a>
+      <a href="/vacation.html" class="active">🏖 휴가조회</a>
+      <a href="/logs.html">📋 로그</a>
+      <a href="/settings.html">⚙️ 설정</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>휴가 사용 현황</h2>
+      <div class="form-row">
+        <label>조회년도</label>
+        <select id="year-select"></select>
+        <button class="primary" id="refresh">새로고침</button>
+        <span style="flex:1"></span>
+        <a class="btn-external" id="btn-new-vacation"
+           href="https://timesheet.uangel.com/times/application/vacation/create.htm"
+           target="_blank" rel="noopener noreferrer"
+           title="회사 타임시트의 휴가 등록 페이지를 새 탭으로 엽니다">
+          ＋ 새 휴가 등록 <span class="ext-icon">↗</span>
+        </a>
+        <a class="btn-external-secondary"
+           href="https://timesheet.uangel.com/times/application/vacation/search.htm"
+           target="_blank" rel="noopener noreferrer"
+           title="회사 타임시트의 휴가계 관리 페이지를 새 탭으로 엽니다">
+          회사 페이지에서 관리 <span class="ext-icon">↗</span>
+        </a>
+      </div>
+      <div id="annual-summary" class="vac-summary muted">로딩…</div>
+    </section>
+
+    <section>
+      <h2>휴가계 목록</h2>
+      <p class="muted">회사 시스템의 휴가계 조회 — 등록/수정은 위의 “＋ 새 휴가 등록” 버튼으로 회사 페이지에서 진행.</p>
+      <table id="vac-list">
+        <thead>
+          <tr>
+            <th>기안일</th>
+            <th>유형</th>
+            <th>사유</th>
+            <th>기간</th>
+            <th style="width:70px">일수</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="vac-summary" class="muted"></p>
+    </section>
+  </main>
+  <script type="module" src="/static/js/vacation.js"></script>
+</body>
+</html>

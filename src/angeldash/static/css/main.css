@@ -1,0 +1,527 @@
+/*
+ * AngelDash 통합 다크 팔레트.
+ * 회의실(style.css) 와 보고서/프로젝트/로그/설정(이 파일) 가 같은 :root 변수를 공유한다.
+ * style.css 가 사용하는 알리아스 (--color-fg, --color-fg-mute, --color-panel, --color-mine 등)
+ * 도 여기서 정의해 한 곳에서 팔레트를 일괄 관리.
+ */
+:root {
+  /* 표면 — 페이지 배경 → 카드/패널 → 강조 패널 순으로 명도 상승 */
+  --color-bg: #0f1115;
+  --color-surface: #1a1d23;
+  --color-surface-2: #14171c;
+  --color-panel: #1a1d23;           /* style.css 호환 알리아스 */
+  --color-panel-2: #14171c;         /* style.css 호환 */
+  --color-border: #2a2f37;
+
+  /* 텍스트 */
+  --color-text: #e6e8eb;
+  --color-fg: #e6e8eb;              /* style.css 호환 */
+  --color-muted: #9ba3ad;
+  --color-fg-mute: #9ba3ad;         /* style.css 호환 */
+
+  /* 강조 */
+  --color-accent: #4a90e2;
+  --color-mine: #4a90e2;            /* style.css 호환 */
+  --color-mine-bg: #1d2c40;
+  --color-other: #6b7280;
+  --color-other-bg: #1f2127;
+  --color-empty-hover: #1c1f25;
+
+  /* 상태 */
+  --color-success: #15803d;
+  --color-warn: #ca8a04;
+  --color-danger: #b91c1c;
+  --color-toast-ok: #15803d;        /* style.css 호환 */
+  --color-toast-err: #b91c1c;       /* style.css 호환 */
+
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+               "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ─── 상단 nav 바 ──────────────────────────────────── */
+header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header nav a {
+  margin-right: 16px;
+  color: var(--color-muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+header nav a:hover { color: var(--color-text); }
+
+header nav a.active { color: var(--color-accent); }
+
+/* 헤더 오른쪽 부가 영역 (현재 사용자 / refresh 버튼 등) */
+header .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+header .header-right #user-name { font-size: 13px; }
+header .header-right #btn-refresh {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  padding: 4px 8px;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ─── 폼/버튼 공통 ───────────────────────────────── */
+.muted { color: var(--color-muted); }
+
+button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover { background: var(--color-empty-hover); }
+
+button.primary {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+button.primary:hover { filter: brightness(1.1); }
+
+input, textarea, select {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font: inherit;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+input::placeholder, textarea::placeholder { color: var(--color-muted); }
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+
+code {
+  background: var(--color-surface-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* ─── 보고서: 일별 블록 ─────────────────────────── */
+.day-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.entry {
+  border-top: 1px solid var(--color-border);
+  padding: 8px 0;
+}
+
+.entry-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.entry-header input.category { flex: 1; }
+.entry-header input.hours { width: 60px; text-align: right; }
+
+.entry-body { width: 100%; }
+
+.totals {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.totals.ok { color: var(--color-success); }
+.totals.warn { color: var(--color-warn); }
+
+.actions-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 1000;
+}
+
+.toast--fail {
+  background: var(--color-danger);
+  color: white;
+  border-color: var(--color-danger);
+}
+
+.week-notes textarea {
+  width: 100%;
+  min-height: 200px;
+}
+
+/* ─── 휴가/공휴일 태그 ─────────────────────────── */
+.vacation-row {
+  background: rgba(202, 138, 4, 0.12);
+  border: 1px dashed var(--color-warn);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  color: #fbbf24;
+}
+
+.vacation-tag {
+  font-size: 12px;
+  background: var(--color-warn);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+}
+
+.holiday-tag {
+  font-size: 12px;
+  background: var(--color-danger);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+}
+
+.day-block--holiday {
+  background: rgba(185, 28, 28, 0.08);
+}
+
+/* ─── 동기화 뱃지 ─────────────────────────────── */
+.sync-badge {
+  font-size: 12px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.sync-synced { background: rgba(21, 128, 61, 0.2); color: #4ade80; }
+.sync-not_submitted { background: rgba(202, 138, 4, 0.2); color: #fbbf24; }
+.sync-remote_only,
+.sync-mismatch { background: rgba(185, 28, 28, 0.2); color: #f87171; }
+.sync-excluded,
+.sync-no_mapping,
+.sync-no_remote_id { background: var(--color-surface-2); color: var(--color-muted); }
+
+.week-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.week-header .spacer { flex: 1; }
+
+.orphan-row {
+  background: rgba(202, 138, 4, 0.12);
+  border: 1px dashed var(--color-warn);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orphan-delete {
+  margin-left: auto;
+  background: var(--color-danger);
+  color: white;
+  border-color: var(--color-danger);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.sync-push-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  margin-left: 4px;
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+/* ─── 일별 meta (source_commit / misc) ──────────── */
+.day-meta {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.meta-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.meta-radio-row label {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.meta-misc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.meta-misc-row strong {
+  padding-top: 6px;
+  min-width: 44px;
+}
+.meta-misc {
+  flex: 1;
+  min-height: 40px;
+}
+
+.meta-auto-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+.meta-auto-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── 프로젝트 페이지 ──────────────────────────── */
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  flex-wrap: wrap;
+}
+.form-row label {
+  white-space: nowrap;
+}
+
+#joinable-table,
+#projects-table,
+#mappings-table,
+#patterns-table {
+  margin-top: 12px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+#joinable-table th, #joinable-table td,
+#projects-table th, #projects-table td,
+#mappings-table th, #mappings-table td,
+#patterns-table th, #patterns-table td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+#joinable-table thead th,
+#projects-table thead th,
+#mappings-table thead th,
+#patterns-table thead th {
+  background: var(--color-surface-2);
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-border);
+}
+#joinable-table tbody tr:hover,
+#projects-table tbody tr:hover,
+#mappings-table tbody tr:hover,
+#patterns-table tbody tr:hover {
+  background: var(--color-empty-hover);
+}
+#patterns-table td code,
+#mappings-table td code {
+  background: var(--color-surface-2);
+}
+
+/* 외부(회사 시스템) 새 탭 링크를 버튼 모양으로 — 일반 버튼과 구분되도록 액센트 외곽선 */
+.btn-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-external:hover {
+  background: var(--color-accent);
+  color: #fff;
+  filter: none;
+}
+.btn-external-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-external-secondary:hover {
+  color: var(--color-text);
+  border-color: var(--color-muted);
+  filter: none;
+}
+.ext-icon { font-size: 12px; opacity: 0.85; }
+
+/* 휴가조회 — 연간 요약 표시 */
+.vac-summary {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--color-text);
+}
+.vac-summary strong { font-weight: 600; color: var(--color-accent); }
+.vac-sep { color: var(--color-muted); }
+.vac-metric { white-space: nowrap; }
+.vac-remaining strong { color: var(--color-success); font-size: 18px; }
+
+/* 휴가조회 — 목록 테이블 (공용 테이블 스타일 재사용) */
+#vac-list {
+  margin-top: 12px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+#vac-list th, #vac-list td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+#vac-list thead th {
+  background: var(--color-surface-2);
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-border);
+}
+#vac-list tbody tr:hover { background: var(--color-empty-hover); }
+
+/* 프로젝트의 work_type 태그 — '행정,공통개발업무 [세미나]' 처럼 표시 */
+.work-type-tag {
+  display: inline-block;
+  font-size: 11px;
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+  border: 1px solid var(--color-border);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* 행 단위 삭제 버튼 */
+.row-delete {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.row-delete:hover {
+  background: rgba(185, 28, 28, 0.2);
+  border-color: var(--color-danger);
+  color: #fca5a5;
+}
+.row-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 섹션 카드 (보고서/프로젝트/로그/설정 페이지 공통) */
+main section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+main section h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+main section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+}
+
+/* 링크 */
+a { color: var(--color-accent); }
+a:hover { filter: brightness(1.2); }

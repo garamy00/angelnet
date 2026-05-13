@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>프로젝트 — AngelDash</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">📅 일일업무보고</a>
+      <a href="/projects.html" class="active">🗂 프로젝트</a>
+      <a href="/rooms.html">🗓 회의실예약</a>
+      <a href="/vacation.html">🏖 휴가조회</a>
+      <a href="/logs.html">📋 로그</a>
+      <a href="/settings.html">⚙️ 설정</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>타임시트 내 프로젝트 관리</h2>
+      <p class="muted">키워드로 회사 타임시트의 프로젝트를 검색하고, 가입 체크박스를 토글하여 즉시 가입/탈퇴.</p>
+      <div class="form-row">
+        <label class="muted">가입 시 자동으로 같이 가입할 task:</label>
+        <span id="auto-task-radios"></span>
+      </div>
+      <div class="form-row">
+        <input id="join-keyword" type="text" placeholder="프로젝트명 키워드" style="flex:1">
+        <button class="primary" id="join-search">검색</button>
+      </div>
+      <table id="joinable-table" style="display:none">
+        <thead>
+          <tr>
+            <th>가입</th><th>프로젝트ID</th><th>코드</th><th>프로젝트명</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="join-summary" class="muted"></p>
+    </section>
+
+    <section>
+      <h2>보고서 프로젝트 등록</h2>
+      <p class="muted">회사 타임시트에서 그 달의 task 목록을 받아와 한 클릭으로 로컬 프로젝트로 등록한다.</p>
+      <div class="form-row">
+        <input id="ym-input" type="month">
+        <button class="primary" id="load-remote">현재 타임시트 task 목록 로드</button>
+      </div>
+      <ul id="remote-tasks"></ul>
+    </section>
+
+    <section>
+      <h2>등록된 프로젝트</h2>
+      <p class="muted">위 “보고서 프로젝트 등록” 으로 등록한 로컬 프로젝트 목록. 카테고리/패턴 매핑에 사용 중이면 삭제할 수 없다.</p>
+      <table id="projects-table">
+        <thead><tr><th>이름</th><th>상태</th><th style="width:60px"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>카테고리 매핑</h2>
+      <p class="muted">보고서에 등장한 카테고리 → 타임시트 프로젝트 매핑. 지난달 이후 등장한 카테고리 + 명시적으로 매핑한 카테고리만 표시.</p>
+      <table id="mappings-table">
+        <thead>
+          <tr>
+            <th>카테고리</th><th>타임시트 프로젝트</th>
+            <th style="width:80px">제외</th><th style="width:60px"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>본문 패턴 매핑 <span class="muted">(카테고리 매핑보다 우선)</span></h2>
+      <p class="muted">본문/카테고리 텍스트에 substring으로 매칭. 긴 패턴이 우선. 예: <code>VM1.0.5 PKG</code>, <code>KCTHLR</code>.</p>
+      <div class="form-row">
+        <input id="new-pattern" type="text" placeholder="패턴 (substring)" style="flex:1">
+        <select id="new-pattern-project"></select>
+        <button class="primary" id="add-pattern">추가</button>
+      </div>
+      <table id="patterns-table">
+        <thead>
+          <tr>
+            <th>패턴</th><th>프로젝트</th>
+            <th style="width:80px">제외</th><th style="width:60px"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+  <script type="module" src="/static/js/projects.js"></script>
+</body>
+</html>

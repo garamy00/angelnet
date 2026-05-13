@@ -2,56 +2,50 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=1280">
-  <title>AngelNet 회의실 대시보드</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <title>일일업무보고 — AngelDash</title>
+  <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
-  <header class="app-header">
-    <div class="app-title">🏢 AngelNet 회의실 대시보드</div>
-    <div class="app-user">
-      <span id="user-name">로딩...</span>
-      <button id="btn-refresh" title="새로고침">🔄</button>
-    </div>
+  <header>
+    <nav>
+      <a href="/" class="active">📅 일일업무보고</a>
+      <a href="/projects.html">🗂 프로젝트</a>
+      <a href="/rooms.html">🗓 회의실예약</a>
+      <a href="/vacation.html">🏖 휴가조회</a>
+      <a href="/logs.html">📋 로그</a>
+      <a href="/settings.html">⚙️ 설정</a>
+    </nav>
+    <span id="user-label" class="muted"></span>
   </header>
+  <main>
+    <section class="week-header">
+      <button id="prev-week">◀ 이전 주</button>
+      <span id="week-label">로딩…</span>
+      <button id="this-week">이번 주</button>
+      <button id="next-week">다음 주 ▶</button>
+      <span class="spacer"></span>
+      <button id="btn-excel" title="이 주가 속한 달의 회사 시스템 Excel 다운로드">📥 다운로드</button>
+    </section>
 
-  <section class="controls">
-    <div class="view-toggle">
-      <button class="view-btn" data-view="day">일</button>
-      <button class="view-btn" data-view="week2">2주</button>
-    </div>
+    <section id="days"></section>
 
-    <button id="date-prev" title="이전">◀</button>
-    <input type="date" id="date-input">
-    <button id="date-next" title="다음">▶</button>
+    <section class="week-notes">
+      <h3>📝 이번 주 메모 (UpNote 동기화에만 포함)</h3>
+      <textarea id="week-note" placeholder="자유 메모…"></textarea>
+    </section>
 
-    <label>층:
-      <select id="floor-select">
-        <option value="8" selected>8층</option>
-        <option value="10">10층</option>
-        <option value="12">12층</option>
+    <section class="actions-bar">
+      <span>타임시트 대상:</span>
+      <select id="target">
+        <option value="week">이번 주 전체</option>
+        <option value="today">오늘만</option>
       </select>
-    </label>
-  </section>
-
-  <section class="room-filter" id="room-filter">
-    <span class="rf-label">회의실:</span>
-    <div class="room-chips" id="room-chips"></div>
-  </section>
-
-  <main class="grid-wrap">
-    <table id="schedule-grid" aria-label="회의실 시간표"></table>
-    <div id="week-container" hidden></div>
+      <button class="primary" id="btn-report" title="오늘 날짜만 복사">📋 팀장 보고 복사 (오늘)</button>
+      <button class="primary" id="btn-timesheet">📤 타임시트 입력</button>
+      <button id="btn-verify" title="회사 시스템 시간과 비교">🔍 타임시트 확인</button>
+      <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성">🔄 UpNote 저장 (주)</button>
+    </section>
   </main>
-
-  <section class="my-reservations">
-    <h2>📋 내 예약 (90일)</h2>
-    <ul id="my-list"></ul>
-  </section>
-
-  <div id="modal-root"></div>
-  <div id="toast-root"></div>
-
-  <script src="/static/app.js" defer></script>
+  <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

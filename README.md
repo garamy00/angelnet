@@ -1,19 +1,27 @@
-# AngelNet Meeting Room Dashboard
+# AngelDash — 사내 통합 대시보드
 
-> Internal-network meeting room reservation dashboard. Built for a single user
-> with credentials stored in macOS Keychain. Replaces legacy bash scripts.
-> Communicates with an internal Spring REST API — **not usable outside the
-> originating company network**.
+> Internal-network unified dashboard. Single-port local web app combining
+> meeting room reservations and daily-report/timesheet/UpNote workflows.
+> Credentials in macOS Keychain. Spring REST against `timesheet.uangel.com`.
 
 ---
 
-# AngelNet 회의실 대시보드
+# AngelDash — 사내 통합 대시보드
 
-AngelNet 회의실 예약 시스템을 macOS 로컬에서 사용하는 1인용 웹 대시보드.
+회의실 예약(구 angelnet) + 일일 업무 보고/타임시트/UpNote 분배(구 angeltime) 를
+하나의 1인용 로컬 웹 대시보드로 통합. 단일 포트 (5173), 단일 상단 nav.
 
-기존 bash 스크립트를 통합해 회의실×시간 그리드 UI 로 재구성한 도구다.
+**참고:** 2026-05 AngelNet 시스템이 Boan PHP/GraphQL 에서 Spring Java REST 로 전면 마이그레이션됨. 이 도구는 새 Spring API (`https://timesheet.uangel.com/times/...`) 만 호출한다.
 
-**참고:** 2026-05 AngelNet 시스템이 Boan PHP/GraphQL 에서 Spring Java REST 로 전면 마이그레이션됨. 이 도구는 새 Spring API (`https://timesheet.uangel.com/times/application/meeting_room/api/`) 만 호출한다.
+## 페이지
+
+| 경로 | 기능 |
+|---|---|
+| `/` | 🗓 회의실 — 예약 현황 그리드 / 등록 / 취소 |
+| `/reports.html` | 📅 보고서 — 주간 일일보고 입력, 팀장 보고/UpNote 동기화 |
+| `/projects.html` | 🗂 프로젝트 — 회사 프로젝트 검색/가입, 카테고리/패턴 매핑 |
+| `/logs.html` | 📋 로그 — UpNote/타임시트/팀장보고 액션 이력 |
+| `/settings.html` | ⚙️ 설정 — 출력 템플릿, UpNote 노트북, 자동 '기타' 문구 등 |
 
 ## 요구사항
 

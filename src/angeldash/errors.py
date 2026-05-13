@@ -33,3 +33,11 @@ class ApiError(AngelNetError):
         super().__init__(message)
         self.status_code = status_code
         self.payload = payload
+
+
+class MappingError(AngelNetError):
+    """타임시트 카테고리 → 프로젝트 매핑 누락. timesheet 서브패키지가 사용."""
+
+    def __init__(self, missing: list[str]) -> None:
+        self.missing = list(missing)
+        super().__init__(f"unmapped categories: {', '.join(self.missing)}")
