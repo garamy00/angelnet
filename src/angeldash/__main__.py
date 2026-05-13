@@ -10,7 +10,7 @@ import sys
 
 import uvicorn
 
-from .auth import KeychainStore
+from ._common.auth import KeychainStore
 from .server import build_app
 
 logger = logging.getLogger(__name__)

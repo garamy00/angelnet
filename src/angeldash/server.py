@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth import KeychainStore
+from ._common.auth import KeychainStore
 from .client import AngelNetClient
 from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .models import Reservation, ReservationCreate, User
