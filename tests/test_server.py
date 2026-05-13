@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 from angeldash._common.models import User
-from angeldash.client import AngelNetClient
 from angeldash.models import Reservation
+from angeldash.rooms.client import AngelNetClient
 from angeldash.server import build_app, get_client, get_password
 
 SAMPLE_RES = {

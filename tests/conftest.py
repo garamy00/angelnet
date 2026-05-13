@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 import respx
 
-from angeldash.client import AngelNetClient
+from angeldash.rooms.client import AngelNetClient
 
 
 @pytest.fixture

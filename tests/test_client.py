@@ -269,7 +269,7 @@ async def test_send_email_subject_and_body_for_create(mock_router, client):
 
 
 async def test_hhmmss_plus_minutes_rejects_midnight_overflow():
-    from angeldash.client import AngelNetClient as AC
+    from angeldash.rooms.client import AngelNetClient as AC
 
     with pytest.raises(ValueError, match="crosses midnight"):
         AC._hhmmss_plus_minutes("23:00:00", 120)
