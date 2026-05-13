@@ -198,6 +198,139 @@ def test_full_work_today_next_day_pm_half_means_no_announce() -> None:
     assert out == ""
 
 
+# ─── 그룹 A — 휴가 사이에 공휴일이 끼는 경우 ─────────────────────
+
+
+def test_a1_vacation_holiday_vacation_same_type() -> None:
+    """다음주 월(연차)-화(공휴일)-수(연차) → '다음주 월요일~다음주 수요일까지 연차'."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[
+            vac("2026-05-18", "연차", 8),  # 월
+            vac("2026-05-20", "연차", 8),  # 수
+        ],
+        holidays=[hol("2026-05-19", "임시공휴일")],  # 화
+    )
+    assert out == "다음주 월요일~다음주 수요일까지 연차입니다"
+
+
+def test_a2_vacation_holiday_vacation_different_types() -> None:
+    """양끝 휴가 type 이 다르면 각각 표시."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[
+            vac("2026-05-18", "연차", 8),  # 월 연차
+            vac("2026-05-20", "공가", 8),  # 수 공가
+        ],
+        holidays=[hol("2026-05-19", "임시공휴일")],
+    )
+    assert out == "다음주 월요일 연차~다음주 수요일 공가입니다"
+
+
+def test_a3_vacation_two_holidays_vacation() -> None:
+    """월(연차)-화·수(공휴일 2일)-목(연차) → '월요일~목요일까지 연차'."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[
+            vac("2026-05-18", "연차", 8),  # 월
+            vac("2026-05-21", "연차", 8),  # 목
+        ],
+        holidays=[
+            hol("2026-05-19", "임시공휴일"),  # 화
+            hol("2026-05-20", "임시공휴일"),  # 수
+        ],
+    )
+    assert out == "다음주 월요일~다음주 목요일까지 연차입니다"
+
+
+# ─── 그룹 B — 공휴일 근처에 반일 반차가 끼는 경우 ─────────────
+
+
+def test_b1_holiday_then_am_half_next_day() -> None:
+    """공휴일(월) → 다음날 오전 반차(화, PM 출근) → '다음주 화요일 오전 반차'."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[vac("2026-05-19", "반차(오전)", 4)],  # 화 오전 반차
+        holidays=[hol("2026-05-18", "임시공휴일")],  # 월 공휴일
+    )
+    assert out == "다음주 화요일 오전 반차입니다"
+
+
+def test_b2_pm_half_today_then_holiday_tomorrow() -> None:
+    """오늘 오후 반차(화) + 다음날 공휴일(수) → '오늘 오후 반차' (수는 implicit)."""
+    out = generate_misc_auto(
+        "2026-05-12",  # 화
+        vacations=[vac("2026-05-12", "반차(오후)", 4)],
+        holidays=[hol("2026-05-13", "임시공휴일")],
+    )
+    assert out == "오늘 오후 반차입니다"
+
+
+def test_b3_pm_half_today_holiday_then_am_half() -> None:
+    """월 PM 반차 + 화 공휴일 + 수 AM 반차 (점심부터 모레 점심까지 연속 off)."""
+    out = generate_misc_auto(
+        "2026-05-11",  # 월
+        vacations=[
+            vac("2026-05-11", "반차(오후)", 4),
+            vac("2026-05-13", "반차(오전)", 4),
+        ],
+        holidays=[hol("2026-05-12", "임시공휴일")],
+    )
+    assert out == "오늘 오후 반차~모레 오전 반차입니다"
+
+
+def test_b4_holiday_then_future_pm_half_only_no_announce() -> None:
+    """공휴일(월) 후 화 오후 반차만 → 화 AM 이 근무라 span 끊김. 안내 없음."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[vac("2026-05-19", "반차(오후)", 4)],  # 화 오후 반차
+        holidays=[hol("2026-05-18", "임시공휴일")],  # 월 공휴일
+    )
+    assert out == ""
+
+
+def test_b5_am_half_breaks_span_holiday_after_unannounced() -> None:
+    """월 AM 반차(PM 근무) + 화 공휴일.
+
+    월 PM 근무가 span 을 끊어 화 공휴일은 미언급.
+    """
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[vac("2026-05-18", "반차(오전)", 4)],
+        holidays=[hol("2026-05-19", "임시공휴일")],
+    )
+    assert out == "다음주 월요일 오전 반차입니다"
+
+
+# ─── 그룹 C — 미묘한 경계 ─────────────────────────────────────
+
+
+def test_c1_weekend_overlapping_holiday() -> None:
+    """공휴일이 주말과 겹쳐도 다음주 월 연차는 정상 안내."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[vac("2026-05-18", "연차", 8)],
+        holidays=[hol("2026-05-16", "임시공휴일")],  # 토 = 주말과 겹침
+    )
+    assert out == "다음주 월요일 연차입니다"
+
+
+def test_c2_long_holiday_continues_to_next_next_week() -> None:
+    """다음주 월-금 5일 공휴일 + 다다음주 월 연차 → '다다음주 월요일 연차'."""
+    out = generate_misc_auto(
+        "2026-05-15",  # 금
+        vacations=[vac("2026-05-25", "연차", 8)],  # 다다음주 월
+        holidays=[
+            hol("2026-05-18", "임시공휴일"),  # 월
+            hol("2026-05-19", "임시공휴일"),  # 화
+            hol("2026-05-20", "임시공휴일"),  # 수
+            hol("2026-05-21", "임시공휴일"),  # 목
+            hol("2026-05-22", "임시공휴일"),  # 금
+        ],
+    )
+    assert out == "다다음주 월요일 연차입니다"
+
+
 def test_user_scenario_wed_thu_fri_continuous_half_then_next_week() -> None:
     """사용자 시나리오: 수(근무)→목(오후반차)→금(가정의날+오전반차)→다음주 월-금 연차.
 
