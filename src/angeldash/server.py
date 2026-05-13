@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ._common.auth import KeychainStore
 from .client import AngelNetClient
-from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
+from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .models import Reservation, ReservationCreate, User
 from .rooms import ROOMS, list_rooms_on_floor
 from .timesheet import db as ts_db
@@ -79,6 +79,7 @@ def build_app(
         # 사용자 DB 에 과거 DEFAULT 가 그대로 저장돼 있으면 (= 미커스텀) 삭제하여
         # 코드의 새 DEFAULT 가 적용되도록 한다.
         from .timesheet.templates import OBSOLETE_DEFAULTS
+
         ts_db.cleanup_obsolete_default_settings(conn, OBSOLETE_DEFAULTS)
 
         app.dependency_overrides[get_client] = lambda: rooms_client

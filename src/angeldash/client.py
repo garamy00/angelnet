@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import httpx
 
 from ._http_relogin import AutoReloginHttp
-from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
+from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .models import Reservation, ReservationCreate, User
 
 logger = logging.getLogger(__name__)

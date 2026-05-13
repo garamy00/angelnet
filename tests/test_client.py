@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from angeldash.errors import ApiError, AuthError, BotBlockedError
+from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 from angeldash.models import Reservation, ReservationCreate
 
 PAYLOAD = ReservationCreate(
@@ -327,10 +327,12 @@ async def test_api_call_auto_relogins_on_session_expired(mock_router, client):
     # 첫 호출: 401 (세션 만료), 두 번째 호출: 정상 응답
     mock_router.get(
         "https://timesheet.uangel.com/times/application/meeting_room/api/reservations",
-    ).mock(side_effect=[
-        httpx.Response(401, json={"error": "session expired"}),
-        httpx.Response(200, json={"data": [SAMPLE_SPRING_RES], "success": True}),
-    ])
+    ).mock(
+        side_effect=[
+            httpx.Response(401, json={"error": "session expired"}),
+            httpx.Response(200, json={"data": [SAMPLE_SPRING_RES], "success": True}),
+        ]
+    )
 
     items = await client.list_reservations("2026-05-01", "2026-08-01")
     assert len(items) == 1

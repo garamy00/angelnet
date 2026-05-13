@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from angeldash.client import AngelNetClient
-from angeldash.errors import ApiError, AuthError, BotBlockedError
+from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 from angeldash.models import Reservation, User
 from angeldash.server import build_app, get_client, get_password
 
@@ -179,7 +179,7 @@ def test_api_error_uses_carried_status(app_client):
 
 
 def test_angelnet_generic_error_maps_to_500(app_client):
-    from angeldash.errors import AngelNetError
+    from angeldash._common.errors import AngelNetError
 
     client, fake = app_client
     fake.list_reservations.side_effect = AngelNetError("unknown")

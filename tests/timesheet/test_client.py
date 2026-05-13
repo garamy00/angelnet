@@ -16,11 +16,13 @@ from angeldash.timesheet.client import (
     TS_LOGIN,
     TimesheetClient,
 )
-from angeldash.errors import ApiError, AuthError, BotBlockedError
+from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 
 JOBTIME_SEARCH_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/search.json"
 JOBTIME_SAVE_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/save.json"
-VACATION_SEARCH_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/vacationSearch.json"
+VACATION_SEARCH_URL = (
+    "https://timesheet.uangel.com/times/timesheet/jobtime/vacationSearch.json"
+)
 
 
 @pytest.fixture
@@ -92,12 +94,18 @@ async def test_list_jobtime_tasks_returns_named_tasks(
 ) -> None:
     """search.json 응답을 task_id/name/work_type 로 정규화한다."""
     respx.post(JOBTIME_SEARCH_URL).mock(
-        return_value=httpx.Response(200, json={
-            "rows": [
-                {"id": "11113", "data": ["KT 2026년 LTE 구축", "개발", "0", "0", "0"]},
-                {"id": "11114", "data": ["EM 고도화", "개발", "0", "0", "0"]},
-            ],
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {
+                        "id": "11113",
+                        "data": ["KT 2026년 LTE 구축", "개발", "0", "0", "0"],
+                    },
+                    {"id": "11114", "data": ["EM 고도화", "개발", "0", "0", "0"]},
+                ],
+            },
+        )
     )
     tasks = await client.list_jobtime_tasks(year_month="2026-05")
     await client.close()
@@ -111,13 +119,16 @@ async def test_list_jobtime_tasks_filters_subtotal_rows(
 ) -> None:
     """id 가 음수인 합계/소계 행은 제외된다."""
     respx.post(JOBTIME_SEARCH_URL).mock(
-        return_value=httpx.Response(200, json={
-            "rows": [
-                {"id": "11113", "data": ["X", "개발", "0"]},
-                {"id": "-1000", "data": ["", "소계", "0"]},
-                {"id": "-2000", "data": ["", "월합계", "0"]},
-            ],
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {"id": "11113", "data": ["X", "개발", "0"]},
+                    {"id": "-1000", "data": ["", "소계", "0"]},
+                    {"id": "-2000", "data": ["", "월합계", "0"]},
+                ],
+            },
+        )
     )
     tasks = await client.list_jobtime_tasks(year_month="2026-05")
     await client.close()
@@ -133,8 +144,12 @@ async def test_submit_jobtimes_sends_form_encoded_rows(
         return_value=httpx.Response(200, text="OK")
     )
     rows = [
-        {"task_id": "11113", "work_hour": 4,
-         "work_day": "20260512", "user_id": "alice"},
+        {
+            "task_id": "11113",
+            "work_hour": 4,
+            "work_day": "20260512",
+            "user_id": "alice",
+        },
     ]
     result = await client.submit_jobtimes(rows)
     await client.close()
@@ -143,8 +158,9 @@ async def test_submit_jobtimes_sends_form_encoded_rows(
     req = route.calls[0].request
     body = req.content.decode()
     assert body.startswith("rows=")
-    decoded = body[len("rows="):]
+    decoded = body[len("rows=") :]
     from urllib.parse import unquote_plus
+
     parsed = _json.loads(unquote_plus(decoded))
     assert parsed == rows
 
@@ -154,46 +170,75 @@ async def test_submit_jobtimes_error_prefix_raises_api_error(
     client: TimesheetClient,
 ) -> None:
     """응답이 'error:' 로 시작하면 ApiError 로 변환된다."""
-    from angeldash.errors import ApiError
+    from angeldash._common.errors import ApiError
+
     respx.post(JOBTIME_SAVE_URL).mock(
         return_value=httpx.Response(200, text="error:duplicate entry")
     )
     with pytest.raises(ApiError) as exc:
-        await client.submit_jobtimes([{
-            "task_id": "11113", "work_hour": 4,
-            "work_day": "20260512", "user_id": "alice",
-        }])
+        await client.submit_jobtimes(
+            [
+                {
+                    "task_id": "11113",
+                    "work_hour": 4,
+                    "work_day": "20260512",
+                    "user_id": "alice",
+                }
+            ]
+        )
     await client.close()
     assert "duplicate entry" in str(exc.value)
 
 
 @respx.mock
 async def test_submit_jobtimes_4xx_raises(client: TimesheetClient) -> None:
-    from angeldash.errors import ApiError
+    from angeldash._common.errors import ApiError
+
     respx.post(JOBTIME_SAVE_URL).mock(
         return_value=httpx.Response(500, text="server error")
     )
     with pytest.raises(ApiError):
-        await client.submit_jobtimes([{
-            "task_id": "11113", "work_hour": 4,
-            "work_day": "20260512", "user_id": "alice",
-        }])
+        await client.submit_jobtimes(
+            [
+                {
+                    "task_id": "11113",
+                    "work_hour": 4,
+                    "work_day": "20260512",
+                    "user_id": "alice",
+                }
+            ]
+        )
     await client.close()
 
 
 @respx.mock
 async def test_list_vacations_parses_grid(client: TimesheetClient) -> None:
     """vacationSearch.json 의 dhtmlxGrid 응답을 (date, type, hours) 로 변환."""
-    respx.post(VACATION_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [
-            # 1409 = 연차. 5/4 = 8h, 마지막은 합계.
-            {"id": "1409", "data": ["연차"] + ["0"]*3 + ["8"] + ["0"]*27 + ["8"]},
-            # 2145 = 반차(오후). 5/15 = 4h.
-            {"id": "2145", "data": ["반차(오후)"] + ["0"]*14 + ["4"] + ["0"]*16 + ["4"]},
-            # 비어있는 종류는 결과에 안 나옴
-            {"id": "927", "data": ["공가"] + ["0"]*31 + ["0"]},
-        ],
-    }))
+    respx.post(VACATION_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    # 1409 = 연차. 5/4 = 8h, 마지막은 합계.
+                    {
+                        "id": "1409",
+                        "data": ["연차"] + ["0"] * 3 + ["8"] + ["0"] * 27 + ["8"],
+                    },
+                    # 2145 = 반차(오후). 5/15 = 4h.
+                    {
+                        "id": "2145",
+                        "data": ["반차(오후)"]
+                        + ["0"] * 14
+                        + ["4"]
+                        + ["0"] * 16
+                        + ["4"],
+                    },
+                    # 비어있는 종류는 결과에 안 나옴
+                    {"id": "927", "data": ["공가"] + ["0"] * 31 + ["0"]},
+                ],
+            },
+        )
+    )
     items = await client.list_vacations(year_month="2026-05")
     await client.close()
     assert items == [
@@ -209,17 +254,30 @@ async def test_fetch_jobtime_grid_parses_matrix(client: TimesheetClient) -> None
     work_type 컬럼 (data[1]) 을 day 1 로 잘못 읽으면 모든 day 가 1씩 shift 되어
     잘못된 비교 결과를 만든다. 회귀 방지 테스트.
     """
-    respx.post(JOBTIME_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [
-            # work_type="개발" + 5/4=8h, 5/12=4h, 월합계=12
-            {"id": "11113", "data":
-                ["EM 고도화", "개발"] + ["0"]*3 + ["8"] + ["0"]*7 + ["4"] + ["0"]*19 + ["12"]},
-            # 빈 task (work_type 만)
-            {"id": "11114", "data": ["다른", "개발"] + ["0"]*31 + ["0"]},
-            # 합계 행
-            {"id": "-1000", "data": ["", "소계"] + ["0"]*31 + ["0"]},
-        ],
-    }))
+    respx.post(JOBTIME_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    # work_type="개발" + 5/4=8h, 5/12=4h, 월합계=12
+                    {
+                        "id": "11113",
+                        "data": ["EM 고도화", "개발"]
+                        + ["0"] * 3
+                        + ["8"]
+                        + ["0"] * 7
+                        + ["4"]
+                        + ["0"] * 19
+                        + ["12"],
+                    },
+                    # 빈 task (work_type 만)
+                    {"id": "11114", "data": ["다른", "개발"] + ["0"] * 31 + ["0"]},
+                    # 합계 행
+                    {"id": "-1000", "data": ["", "소계"] + ["0"] * 31 + ["0"]},
+                ],
+            },
+        )
+    )
     grid = await client.fetch_jobtime_grid(year_month="2026-05")
     await client.close()
     # work_type 컬럼을 건너뛰고 정확한 일자에 매핑되어야 한다
@@ -236,17 +294,19 @@ async def test_download_jobtime_excel_returns_bytes_and_filename(
     EXCEL_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/excelbyday.json"
     # XLSX magic + dummy zip content
     xlsx_body = b"PK\x03\x04" + b"\x00" * 200
-    respx.post(EXCEL_URL).mock(return_value=httpx.Response(
-        200,
-        content=xlsx_body,
-        headers={
-            "content-type": "application/octet-stream;charset=UTF-8",
-            "content-disposition": (
-                'attachment;filename='
-                '"%EC%9E%91%EC%97%85%EC%8B%9C%EA%B0%84_%EB%A6%AC%ED%8F%AC%ED%8A%B8%282026-05%29.xlsx";'
-            ),
-        },
-    ))
+    respx.post(EXCEL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            content=xlsx_body,
+            headers={
+                "content-type": "application/octet-stream;charset=UTF-8",
+                "content-disposition": (
+                    "attachment;filename="
+                    '"%EC%9E%91%EC%97%85%EC%8B%9C%EA%B0%84_%EB%A6%AC%ED%8F%AC%ED%8A%B8%282026-05%29.xlsx";'
+                ),
+            },
+        )
+    )
     body, filename = await client.download_jobtime_excel(year_month="2026-05")
     await client.close()
     assert body == xlsx_body
@@ -258,11 +318,15 @@ async def test_download_jobtime_excel_rejects_non_xlsx_response(
     client: TimesheetClient,
 ) -> None:
     """XLSX magic 이 아니면 ApiError."""
-    from angeldash.errors import ApiError
+    from angeldash._common.errors import ApiError
+
     EXCEL_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/excelbyday.json"
-    respx.post(EXCEL_URL).mock(return_value=httpx.Response(
-        200, content=b"<html>error</html>",
-    ))
+    respx.post(EXCEL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            content=b"<html>error</html>",
+        )
+    )
     with pytest.raises(ApiError):
         await client.download_jobtime_excel(year_month="2026-05")
     await client.close()
@@ -271,12 +335,17 @@ async def test_download_jobtime_excel_rejects_non_xlsx_response(
 @respx.mock
 async def test_list_vacations_handles_short_month(client: TimesheetClient) -> None:
     """4월 데이터의 31일 자리 → ValueError 로 자동 skip (그 달에 31일 없음)."""
-    respx.post(VACATION_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [
-            # 4월은 30일까지. 31일째 자리에 8 이 있어도 무시.
-            {"id": "1409", "data": ["연차"] + ["0"]*30 + ["8"] + ["8"]},
-        ],
-    }))
+    respx.post(VACATION_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    # 4월은 30일까지. 31일째 자리에 8 이 있어도 무시.
+                    {"id": "1409", "data": ["연차"] + ["0"] * 30 + ["8"] + ["8"]},
+                ],
+            },
+        )
+    )
     items = await client.list_vacations(year_month="2026-04")
     await client.close()
     assert items == []  # 31일은 4월에 없으므로 skip
@@ -288,7 +357,9 @@ HOLIDAY_TAG_SEARCH_URL = (
 
 JOIN_PAGE_URL = "https://timesheet.uangel.com/times/timesheet/join/searchForm.htm"
 JOIN_SEARCH_URL = "https://timesheet.uangel.com/times/timesheet/join/search.json"
-JOIN_USER_MAP_SAVE_URL = "https://timesheet.uangel.com/times/timesheet/join/UserMapJoinSave.json"
+JOIN_USER_MAP_SAVE_URL = (
+    "https://timesheet.uangel.com/times/timesheet/join/UserMapJoinSave.json"
+)
 
 
 _JOIN_PAGE_HTML = """
@@ -310,23 +381,52 @@ async def test_search_joinable_projects_normalizes_rows(
 
     data[0] 이 정수일 수도 있고, data[3] 이 가입 여부.
     """
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
-    respx.post(JOIN_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "pageSize": 50, "page": 1, "totalCount": 2,
-        "rows": {  # 이중 wrapper
-            "rows": [
-                # data[0] 정수, data[3] 가입, data[4] status code
-                {"id": "0", "data": [2074, "yGHTRp2503", "2025 김해경전철 LTE-R 구축", "1", "C002001"]},
-                {"id": "1", "data": [2184, "nIIEVg2604", "26년 IITP Evolved SBA 핵심기술개발", "0", "C002001"]},
-            ],
-        },
-    }))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
+    respx.post(JOIN_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "pageSize": 50,
+                "page": 1,
+                "totalCount": 2,
+                "rows": {  # 이중 wrapper
+                    "rows": [
+                        # data[0] 정수, data[3] 가입, data[4] status code
+                        {
+                            "id": "0",
+                            "data": [
+                                2074,
+                                "yGHTRp2503",
+                                "2025 김해경전철 LTE-R 구축",
+                                "1",
+                                "C002001",
+                            ],
+                        },
+                        {
+                            "id": "1",
+                            "data": [
+                                2184,
+                                "nIIEVg2604",
+                                "26년 IITP Evolved SBA 핵심기술개발",
+                                "0",
+                                "C002001",
+                            ],
+                        },
+                    ],
+                },
+            },
+        )
+    )
     res = await client.search_joinable_projects(keyword="LTE")
     await client.close()
     assert res["total"] == 2
     assert res["rows"][0] == {
-        "project_id": "2074", "code": "yGHTRp2503",
-        "name": "2025 김해경전철 LTE-R 구축", "joined": True,
+        "project_id": "2074",
+        "code": "yGHTRp2503",
+        "name": "2025 김해경전철 LTE-R 구축",
+        "joined": True,
     }
     assert res["rows"][1]["joined"] is False
 
@@ -335,7 +435,9 @@ async def test_search_joinable_projects_normalizes_rows(
 async def test_join_project_sends_C002001(
     client: TimesheetClient,
 ) -> None:
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
     route = respx.post(JOIN_USER_MAP_SAVE_URL).mock(
         return_value=httpx.Response(200, text="success")
     )
@@ -345,26 +447,42 @@ async def test_join_project_sends_C002001(
     assert body.startswith("rows=")
     from urllib.parse import unquote_plus
     import json as _json
-    payload = _json.loads(unquote_plus(body[len("rows="):]))
-    assert payload == [{
-        "project_id": "2184", "user_id": "alice", "status": "C002001",
-    }]
+
+    payload = _json.loads(unquote_plus(body[len("rows=") :]))
+    assert payload == [
+        {
+            "project_id": "2184",
+            "user_id": "alice",
+            "status": "C002001",
+        }
+    ]
 
 
-JOIN_TASKS_SEARCH_URL = "https://timesheet.uangel.com/times/timesheet/join/tasks_search.json"
-JOIN_TASKS_SAVE_URL = "https://timesheet.uangel.com/times/timesheet/join/tasksMapJoinSave.json"
+JOIN_TASKS_SEARCH_URL = (
+    "https://timesheet.uangel.com/times/timesheet/join/tasks_search.json"
+)
+JOIN_TASKS_SAVE_URL = (
+    "https://timesheet.uangel.com/times/timesheet/join/tasksMapJoinSave.json"
+)
 
 
 @respx.mock
 async def test_list_project_tasks_normalizes(client: TimesheetClient) -> None:
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
-    respx.post(JOIN_TASKS_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [
-            {"id": "0", "data": [11132, "시험/지원", 0]},
-            {"id": "1", "data": [11131, "개발", 1]},
-            {"id": "2", "data": [11130, "영업", 0]},
-        ],
-    }))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
+    respx.post(JOIN_TASKS_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {"id": "0", "data": [11132, "시험/지원", 0]},
+                    {"id": "1", "data": [11131, "개발", 1]},
+                    {"id": "2", "data": [11130, "영업", 0]},
+                ],
+            },
+        )
+    )
     tasks = await client.list_project_tasks(project_id="2160")
     await client.close()
     assert {t["name"] for t in tasks} == {"시험/지원", "개발", "영업"}
@@ -377,7 +495,9 @@ async def test_list_project_tasks_normalizes(client: TimesheetClient) -> None:
 async def test_set_project_task_joined_sends_correct_row(
     client: TimesheetClient,
 ) -> None:
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
     route = respx.post(JOIN_TASKS_SAVE_URL).mock(
         return_value=httpx.Response(200, text="success")
     )
@@ -385,15 +505,22 @@ async def test_set_project_task_joined_sends_correct_row(
     await client.close()
     from urllib.parse import unquote_plus
     import json as _json
+
     body = route.calls[0].request.content.decode()
-    payload = _json.loads(unquote_plus(body[len("rows="):]))
-    assert payload == [{
-        "task_id": "11131", "user_id": "alice",
-        "project_id": "2160", "status": "C0000001",
-    }]
+    payload = _json.loads(unquote_plus(body[len("rows=") :]))
+    assert payload == [
+        {
+            "task_id": "11131",
+            "user_id": "alice",
+            "project_id": "2160",
+            "status": "C0000001",
+        }
+    ]
 
 
-JOIN_TASKS_DEL_ALL_URL = "https://timesheet.uangel.com/times/timesheet/join/tasksMapDelAll.htm"
+JOIN_TASKS_DEL_ALL_URL = (
+    "https://timesheet.uangel.com/times/timesheet/join/tasksMapDelAll.htm"
+)
 
 
 @respx.mock
@@ -401,13 +528,20 @@ async def test_unjoin_project_cascade_with_joined_task(
     client: TimesheetClient,
 ) -> None:
     """가입 task 가 있으면 tasksMapDelAll 만 호출 (임시 가입 불필요)."""
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
-    respx.post(JOIN_TASKS_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [
-            {"id": "0", "data": [11132, "시험/지원", 0]},
-            {"id": "1", "data": [11131, "개발", 1]},
-        ],
-    }))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
+    respx.post(JOIN_TASKS_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {"id": "0", "data": [11132, "시험/지원", 0]},
+                    {"id": "1", "data": [11131, "개발", 1]},
+                ],
+            },
+        )
+    )
     save_route = respx.post(JOIN_TASKS_SAVE_URL).mock(
         return_value=httpx.Response(200, text="success")
     )
@@ -428,13 +562,20 @@ async def test_unjoin_project_cascade_no_joined_task(
     client: TimesheetClient,
 ) -> None:
     """가입 task 가 0개면 임시 task 1개 가입 → tasksMapDelAll cascade."""
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
-    respx.post(JOIN_TASKS_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [
-            {"id": "0", "data": [11132, "시험/지원", 0]},
-            {"id": "1", "data": [11131, "개발", 0]},
-        ],
-    }))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
+    respx.post(JOIN_TASKS_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {"id": "0", "data": [11132, "시험/지원", 0]},
+                    {"id": "1", "data": [11131, "개발", 0]},
+                ],
+            },
+        )
+    )
     save_route = respx.post(JOIN_TASKS_SAVE_URL).mock(
         return_value=httpx.Response(200, text="success")
     )
@@ -447,13 +588,18 @@ async def test_unjoin_project_cascade_no_joined_task(
     assert del_route.called is True
     from urllib.parse import unquote_plus
     import json as _json
+
     body = save_route.calls[0].request.content.decode()
-    payload = _json.loads(unquote_plus(body[len("rows="):]))
+    payload = _json.loads(unquote_plus(body[len("rows=") :]))
     # 첫 task 를 임시 가입 (C0000001)
-    assert payload == [{
-        "task_id": "11132", "user_id": "alice",
-        "project_id": "2160", "status": "C0000001",
-    }]
+    assert payload == [
+        {
+            "task_id": "11132",
+            "user_id": "alice",
+            "project_id": "2160",
+            "status": "C0000001",
+        }
+    ]
 
 
 @respx.mock
@@ -461,10 +607,17 @@ async def test_unjoin_project_raises_when_no_tasks(
     client: TimesheetClient,
 ) -> None:
     """프로젝트에 task 자체가 없으면 cascade 불가 → 명시적 에러."""
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
-    respx.post(JOIN_TASKS_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [],
-    }))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
+    respx.post(JOIN_TASKS_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [],
+            },
+        )
+    )
     with pytest.raises(ApiError, match="no tasks"):
         await client.unjoin_project(project_id="2160")
     await client.close()
@@ -475,10 +628,17 @@ async def test_unjoin_project_raises_when_server_rejects(
     client: TimesheetClient,
 ) -> None:
     """tasksMapDelAll 이 success=false 반환하면 에러."""
-    respx.get(JOIN_PAGE_URL).mock(return_value=httpx.Response(200, text=_JOIN_PAGE_HTML))
-    respx.post(JOIN_TASKS_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "rows": [{"id": "0", "data": [11131, "개발", 1]}],
-    }))
+    respx.get(JOIN_PAGE_URL).mock(
+        return_value=httpx.Response(200, text=_JOIN_PAGE_HTML)
+    )
+    respx.post(JOIN_TASKS_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [{"id": "0", "data": [11131, "개발", 1]}],
+            },
+        )
+    )
     respx.post(JOIN_TASKS_DEL_ALL_URL).mock(
         return_value=httpx.Response(200, json={"result": 0, "success": False})
     )
@@ -490,14 +650,23 @@ async def test_unjoin_project_raises_when_server_rejects(
 @respx.mock
 async def test_list_holidays_parses_days(client: TimesheetClient) -> None:
     """holidayTagSearch.json 응답을 (date, label, types) 로 정규화."""
-    respx.post(HOLIDAY_TAG_SEARCH_URL).mock(return_value=httpx.Response(200, json={
-        "days": {
-            "20260501": {"label": "노동절", "labels": ["노동절"],
-                         "types": ["public"], "locked": True},
-            "20260505": {"label": "어린이날", "types": ["public"]},
-            "invalid": {"label": "skipped"},  # 잘못된 키 → skip
-        },
-    }))
+    respx.post(HOLIDAY_TAG_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "days": {
+                    "20260501": {
+                        "label": "노동절",
+                        "labels": ["노동절"],
+                        "types": ["public"],
+                        "locked": True,
+                    },
+                    "20260505": {"label": "어린이날", "types": ["public"]},
+                    "invalid": {"label": "skipped"},  # 잘못된 키 → skip
+                },
+            },
+        )
+    )
     items = await client.list_holidays(year_month="2026-05")
     await client.close()
     assert {(it["date"], it["label"]) for it in items} == {
@@ -523,7 +692,8 @@ async def test_get_annual_vacation_summary_parses_quoted_url_encoded(
     """서버 응답 '"23.0+-+9.0+%3D+14.0+%EC%9D%BC"' → total/used/remaining."""
     respx.get(VACATION_ANNUAL_URL).mock(
         return_value=httpx.Response(
-            200, text='"23.0+-+9.0+%3D+14.0+%EC%9D%BC"',
+            200,
+            text='"23.0+-+9.0+%3D+14.0+%EC%9D%BC"',
         )
     )
     r = await client.get_annual_vacation_summary(year=2026)
