@@ -15,7 +15,6 @@ from .client import AngelNetClient
 from .models import Reservation, ReservationCreate
 from .registry import ROOMS, list_rooms_on_floor
 
-
 # ─── 의존성 placeholder ────────────────────────────────
 
 
