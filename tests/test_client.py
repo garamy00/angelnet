@@ -312,6 +312,57 @@ async def test_login_fetches_user_name_endpoint(mock_router, client):
     assert user.name == "Test User"
 
 
+# ─── 자동 재로그인 (세션 만료 감지) ──────────────────────────
+
+
+async def test_api_call_auto_relogins_on_session_expired(mock_router, client):
+    """로그인 성공 후 API 호출이 401 을 받으면 자동 재로그인 + 재시도한다.
+
+    회사 Timesheet 세션(JSESSIONID) 이 idle 만료된 케이스. 클라이언트가 캐시한
+    SESSION_TTL 가 살아있어도, 응답이 만료 신호면 1회에 한해 재로그인 후 재시도.
+    """
+    await _setup_login_mocks(mock_router)
+    await client.login("pwd")
+
+    # 첫 호출: 401 (세션 만료), 두 번째 호출: 정상 응답
+    mock_router.get(
+        "https://timesheet.uangel.com/times/application/meeting_room/api/reservations",
+    ).mock(side_effect=[
+        httpx.Response(401, json={"error": "session expired"}),
+        httpx.Response(200, json={"data": [SAMPLE_SPRING_RES], "success": True}),
+    ])
+
+    items = await client.list_reservations("2026-05-01", "2026-08-01")
+    assert len(items) == 1
+    assert items[0].id == "27"
+
+    # login.json 이 자동 재로그인으로 한 번 더 호출됐는지 (초기 1 + 재로그인 1 = 2)
+    login_paths = [
+        c.request.url.path
+        for c in mock_router.calls
+        if c.request.url.path == "/home/login.json"
+    ]
+    assert len(login_paths) == 2
+
+
+async def test_login_4xx_does_not_trigger_relogin_loop(mock_router, client):
+    """최초 로그인 실패는 자동 재로그인 트리거 없이 즉시 AuthError 로 surface.
+
+    password 캐시는 로그인 성공 후에만 채워지므로, 첫 시도가 401 이면 재시도
+    하지 않고 한 번만 실패해야 한다.
+    """
+    mock_router.post("https://timesheet.uangel.com/home/login.json").respond(
+        status_code=401, json={"success": False, "message": "invalid"}
+    )
+    with pytest.raises(AuthError):
+        await client.login("badpwd")
+    # 정확히 한 번만 호출 (재시도 없음)
+    login_calls = [
+        c for c in mock_router.calls if c.request.url.path == "/home/login.json"
+    ]
+    assert len(login_calls) == 1
+
+
 async def test_login_user_name_failure_falls_back_to_user_id(mock_router, client):
     """user-name endpoint 실패해도 login 자체는 성공 (name=user_id fallback)."""
     mock_router.post("https://timesheet.uangel.com/home/login.json").respond(

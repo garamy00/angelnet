@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from ._http_relogin import AutoReloginHttp
 from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
 from .models import Reservation, ReservationCreate, User
 
@@ -50,15 +51,32 @@ class AngelNetClient:
         self._user: User | None = None
         self._session_ready = False
         self._session_expires = 0.0
-        self._http = httpx.AsyncClient(
+        # 자동 재로그인 시 사용할 password 캐시. 최초 로그인 성공 시에만 채워짐.
+        self._password: str | None = None
+        # 만료 감지 + 1회 재시도 래퍼로 모든 HTTP 호출을 보낸다.
+        raw_http = httpx.AsyncClient(
             verify=False,
             timeout=HTTP_TIMEOUT,
             headers={"User-Agent": USER_AGENT},
+        )
+        self._http = AutoReloginHttp(
+            raw_http,
+            can_refresh=lambda: self._password is not None,
+            refresh=self._refresh_session,
         )
 
     async def close(self) -> None:
         """HTTP 클라이언트를 닫는다."""
         await self._http.aclose()
+
+    async def _refresh_session(self) -> None:
+        """만료 감지 시 호출되는 재로그인 훅. 캐시 무효화 후 login 재실행."""
+        if self._password is None:
+            raise AuthError("cannot refresh session without cached password")
+        self._session_ready = False
+        self._session_expires = 0.0
+        self._user = None
+        await self.login(self._password)
 
     # ─── 인증 ────────────────────────────────────────────
 
@@ -131,6 +149,8 @@ class AngelNetClient:
         )
         self._session_ready = True
         self._session_expires = time.time() + SESSION_TTL
+        # 성공한 password 만 캐시 → 첫 로그인 실패는 자동 재시도 트리거하지 않음.
+        self._password = password
         logger.info("Spring session established for user=%s", self.user_id)
         return self._user
 
