@@ -454,15 +454,20 @@ function applyVerifyResult(items) {
     if (!block) continue;
     const row = document.createElement('div');
     row.className = 'orphan-row';
+    const wt = (it.task_work_type || '').trim();
+    const wtTag = wt
+      ? ` <span class="work-type-tag">[${escapeHtml(wt)}]</span>`
+      : '';
+    const fullLabel = wt ? `${it.task_name} [${wt}]` : it.task_name;
     row.innerHTML = `
       <span class="muted">⚠️ 회사 시스템에만 있음:</span>
-      <strong>${escapeHtml(it.task_name)}</strong> ${it.remote_hours}h
+      <strong>${escapeHtml(it.task_name)}</strong>${wtTag} ${it.remote_hours}h
     `;
     const delBtn = document.createElement('button');
     delBtn.textContent = '회사에서 삭제';
     delBtn.className = 'orphan-delete';
     delBtn.addEventListener('click', async () => {
-      if (!confirm(`회사 시스템에서 [${it.task_name}] ${it.date} ${it.remote_hours}h 를 삭제할까요? (hours=0 으로 update)`)) return;
+      if (!confirm(`회사 시스템에서 [${fullLabel}] ${it.date} ${it.remote_hours}h 를 삭제할까요? (hours=0 으로 update)`)) return;
       delBtn.disabled = true;
       try {
         await apiPost('/api/actions/timesheet-push-one', {
