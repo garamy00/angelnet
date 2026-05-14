@@ -544,6 +544,112 @@ document.getElementById('btn-excel').addEventListener('click', async () => {
   }
 });
 
+// ─── 이번달 타임시트 미리보기 모달 ──────────────────
+
+const KR_DAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
+
+function openMonthlyModal() {
+  document.getElementById('monthly-modal').hidden = false;
+}
+function closeMonthlyModal() {
+  document.getElementById('monthly-modal').hidden = true;
+}
+document.getElementById('monthly-modal-close').addEventListener('click', closeMonthlyModal);
+document.querySelector('#monthly-modal .modal-backdrop').addEventListener('click', closeMonthlyModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('monthly-modal').hidden) {
+    closeMonthlyModal();
+  }
+});
+
+function renderMonthlyGrid(data) {
+  const body = document.getElementById('monthly-modal-body');
+  document.getElementById('monthly-modal-title').textContent =
+    `📊 ${data.year_month} 타임시트 (회사 시스템)`;
+
+  if (!data.tasks || data.tasks.length === 0) {
+    body.innerHTML = '<p class="muted">이번달 입력된 task 가 없습니다.</p>';
+    return;
+  }
+
+  const [yStr, mStr] = data.year_month.split('-');
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+  const dim = data.days_in_month;
+
+  // 각 일자의 요일 (0=일 ~ 6=토). 한국 기준 toUTC(year, month-1, day) 의 getUTCDay
+  const dayOfWeek = (d) => {
+    const dt = new Date(Date.UTC(year, month - 1, d));
+    return dt.getUTCDay();
+  };
+
+  const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+  const esc = (s) => String(s || '').replace(/[&<>]/g, (c) => escMap[c]);
+
+  // 헤더: task | 1(요일) | 2(요일) | ... | 합계
+  let thead = '<thead><tr><th class="task-col">task</th>';
+  for (let d = 1; d <= dim; d += 1) {
+    const dow = dayOfWeek(d);
+    const cls = dow === 0 ? 'sun' : (dow === 6 ? 'sat' : '');
+    thead += `<th class="day-col ${cls}">${d}<br><small>${KR_DAY_SHORT[dow]}</small></th>`;
+  }
+  thead += '<th class="total-col">합계</th></tr></thead>';
+
+  // 본문 행
+  let tbody = '<tbody>';
+  for (const t of data.tasks) {
+    tbody += '<tr>';
+    tbody += `<td class="task-col" title="${esc(t.task_name)}">${esc(t.task_name)}</td>`;
+    for (let d = 1; d <= dim; d += 1) {
+      const h = t.days[d] || 0;
+      const dow = dayOfWeek(d);
+      const wkndCls = (dow === 0 || dow === 6) ? 'wknd' : '';
+      let cellCls = wkndCls;
+      if (h === 0) cellCls += ' empty';
+      else if (h >= 8) cellCls += ' full';
+      else cellCls += ' partial';
+      tbody += `<td class="cell ${cellCls}">${h || ''}</td>`;
+    }
+    tbody += `<td class="total-col"><b>${t.total}</b></td>`;
+    tbody += '</tr>';
+  }
+  tbody += '</tbody>';
+
+  // 합계 행
+  let tfoot = '<tfoot><tr><td class="task-col"><b>일별 합계</b></td>';
+  for (let d = 1; d <= dim; d += 1) {
+    const h = data.daily_totals[d] || 0;
+    const dow = dayOfWeek(d);
+    const wkndCls = (dow === 0 || dow === 6) ? 'wknd' : '';
+    let cellCls = wkndCls;
+    if (h === 0) cellCls += ' empty';
+    else if (h >= 8) cellCls += ' full';
+    else cellCls += ' partial';
+    tfoot += `<td class="cell ${cellCls}"><b>${h || ''}</b></td>`;
+  }
+  tfoot += `<td class="total-col"><b>${data.month_total}</b></td>`;
+  tfoot += '</tr></tfoot>';
+
+  body.innerHTML = `<table class="monthly-grid">${thead}${tbody}${tfoot}</table>`;
+}
+
+document.getElementById('btn-monthly-preview').addEventListener('click', async () => {
+  const ym = monthsForWeek(currentWeek)[0];  // 현재 주가 속한 월
+  document.getElementById('monthly-modal-title').textContent =
+    `📊 ${ym} 타임시트 (회사 시스템) — 로딩…`;
+  document.getElementById('monthly-modal-body').innerHTML =
+    '<p class="muted">회사 시스템에서 fetch 중… (몇 초 소요)</p>';
+  openMonthlyModal();
+  try {
+    const data = await apiGet(`/api/timesheet/monthly-grid?year_month=${ym}`);
+    renderMonthlyGrid(data);
+  } catch (e) {
+    document.getElementById('monthly-modal-body').innerHTML =
+      `<p class="muted">실패: ${e.message}</p>`;
+    toast(`미리보기 실패: ${e.message}`, 'fail');
+  }
+});
+
 (async () => {
   await loadMe();
   await loadWeek();

@@ -722,6 +722,65 @@ def register_routes(app: FastAPI) -> None:
             headers={"Content-Disposition": cd},
         )
 
+    @app.get("/api/timesheet/monthly-grid")
+    async def monthly_grid_route(
+        year_month: str,
+        client: TimesheetClient = Depends(get_client),
+    ) -> dict:
+        """그 달의 task×day 매트릭스 (회사 시스템 fetch).
+
+        Returns:
+            {
+                "year_month": "YYYY-MM",
+                "tasks": [{"task_name": str, "days": {day_int: hours},
+                           "total": float}, ...] (이름순),
+                "daily_totals": {day_int: hours},
+                "month_total": float,
+                "days_in_month": int,
+            }
+        """
+        from calendar import monthrange
+
+        from fastapi import HTTPException
+
+        try:
+            year_s, month_s = year_month.split("-")
+            year, month = int(year_s), int(month_s)
+        except ValueError as exc:
+            raise HTTPException(
+                400, f"invalid year_month: {year_month}",
+            ) from exc
+
+        try:
+            grid = await client.fetch_jobtime_grid(year_month=year_month)
+        except Exception as exc:
+            raise HTTPException(500, f"monthly grid fetch failed: {exc}") from exc
+
+        days_in_month = monthrange(year, month)[1]
+        tasks: list[dict] = []
+        daily_totals: dict[int, float] = {}
+        month_total = 0.0
+        for task_name in sorted(grid.keys()):
+            days = grid[task_name]
+            task_total = round(sum(days.values()), 2)
+            month_total += task_total
+            for day, hours in days.items():
+                daily_totals[day] = round(
+                    daily_totals.get(day, 0.0) + hours, 2,
+                )
+            tasks.append({
+                "task_name": task_name,
+                "days": days,
+                "total": task_total,
+            })
+        return {
+            "year_month": year_month,
+            "tasks": tasks,
+            "daily_totals": daily_totals,
+            "month_total": round(month_total, 2),
+            "days_in_month": days_in_month,
+        }
+
     # ─── Vacations / Holidays (read-only) ──────────
 
     @app.get("/api/vacations")

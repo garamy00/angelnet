@@ -1296,3 +1296,60 @@ def test_weekly_report_upnote_requires_non_empty_rows(api):
     )
     assert r.status_code == 400
     assert "비어" in r.json()["detail"]
+
+
+def test_monthly_grid_returns_tasks_and_totals(api, mock_client):
+    """월간 매트릭스 — task × day 그리드와 합계를 정확히 집계."""
+    from unittest.mock import AsyncMock
+
+    # 회사 시스템: 두 task 가 5월에 입력
+    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
+        "EM 고도화": {1: 8.0, 2: 4.0, 15: 8.0},
+        "SMSC 리빌딩": {2: 4.0, 16: 8.0},
+    })
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["year_month"] == "2026-05"
+    assert body["days_in_month"] == 31
+
+    # task 순서는 이름순 (한글 비교)
+    task_names = [t["task_name"] for t in body["tasks"]]
+    assert task_names == sorted(task_names)
+
+    # task 별 합계
+    by_name = {t["task_name"]: t for t in body["tasks"]}
+    assert by_name["EM 고도화"]["total"] == 20.0
+    assert by_name["SMSC 리빌딩"]["total"] == 12.0
+
+    # 일별 합계 — 2일에 두 task 합쳐서 8
+    # JSON keys 는 문자열로 들어옴
+    daily = body["daily_totals"]
+    assert daily["1"] == 8.0
+    assert daily["2"] == 8.0
+    assert daily["15"] == 8.0
+    assert daily["16"] == 8.0
+
+    # 월 합계
+    assert body["month_total"] == 32.0
+
+
+def test_monthly_grid_invalid_year_month_returns_400(api):
+    r = api.get("/api/timesheet/monthly-grid?year_month=bad-format")
+    assert r.status_code == 400
+    assert "year_month" in r.json()["detail"]
+
+
+def test_monthly_grid_empty_grid(api, mock_client):
+    """task 가 없는 달도 정상 응답 (tasks=[], totals=0)."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-04")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tasks"] == []
+    assert body["daily_totals"] == {}
+    assert body["month_total"] == 0.0
+    assert body["days_in_month"] == 30

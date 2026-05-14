@@ -53,8 +53,24 @@
       <button class="primary" id="btn-report" title="오늘 날짜만 복사">📋 팀장 보고 복사 (오늘)</button>
       <button class="primary" id="btn-timesheet">📤 타임시트 입력</button>
       <button id="btn-verify" title="회사 시스템 시간과 비교">🔍 타임시트 확인</button>
+      <button id="btn-monthly-preview"
+              title="이번달 task × 일자 매트릭스 (회사 시스템 fetch)">📊 이번달 미리보기</button>
       <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성">🔄 UpNote 저장 (주)</button>
     </section>
+
+    <!-- 이번달 타임시트 매트릭스 모달 -->
+    <div id="monthly-modal" class="modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel modal-panel--wide">
+        <div class="modal-header">
+          <strong id="monthly-modal-title">📊 이번달 타임시트</strong>
+          <button id="monthly-modal-close" class="modal-close" title="닫기">×</button>
+        </div>
+        <div id="monthly-modal-body" class="modal-body monthly-grid-body">
+          <p class="muted">로딩…</p>
+        </div>
+      </div>
+    </div>
   </main>
   <script type="module" src="/static/js/main.js"></script>
 </body>

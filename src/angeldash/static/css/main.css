@@ -653,6 +653,90 @@ a:hover { filter: brightness(1.2); }
   text-align: center;
 }
 
+/* ─── 이번달 타임시트 매트릭스 ───────────────────── */
+.modal-panel--wide {
+  width: min(96vw, 1400px) !important;
+}
+.monthly-grid-body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0;
+  overflow: auto;
+}
+table.monthly-grid {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  width: max-content;
+  min-width: 100%;
+}
+table.monthly-grid th,
+table.monthly-grid td {
+  border: 1px solid var(--color-border);
+  padding: 3px 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+table.monthly-grid thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-2);
+  z-index: 2;
+  font-weight: 600;
+}
+table.monthly-grid tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-surface-2);
+  font-weight: 600;
+}
+table.monthly-grid .task-col {
+  position: sticky;
+  left: 0;
+  background: var(--color-surface-2);
+  text-align: left;
+  font-weight: 600;
+  z-index: 1;
+  min-width: 160px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.monthly-grid thead th.task-col,
+table.monthly-grid tfoot td.task-col {
+  z-index: 3;
+}
+table.monthly-grid .day-col {
+  min-width: 32px;
+  font-size: 11px;
+}
+table.monthly-grid .day-col small {
+  color: var(--color-muted);
+  font-weight: normal;
+}
+table.monthly-grid .total-col {
+  background: var(--color-surface-2);
+  font-weight: 600;
+  min-width: 50px;
+}
+table.monthly-grid .day-col.sat,
+table.monthly-grid .day-col.sun small,
+table.monthly-grid .day-col.sun {
+  color: #fca5a5;
+}
+table.monthly-grid .cell.wknd {
+  background: rgba(255, 255, 255, 0.03);
+}
+table.monthly-grid .cell.empty {
+  color: var(--color-muted);
+}
+table.monthly-grid .cell.full {
+  color: var(--color-success);
+}
+table.monthly-grid .cell.partial {
+  color: var(--color-warn);
+}
+
 /* ─── 미리보기 모달 ─────────────────────────────── */
 .modal {
   position: fixed;
