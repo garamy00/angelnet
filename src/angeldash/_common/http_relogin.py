@@ -21,9 +21,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # 마지막 활동 이후 이 초만큼 idle 이면 다음 호출 직전에 사전 재로그인.
-# 회사 Spring 서버의 일반 idle session timeout(약 30분)보다 짧게 잡아
-# 응답을 받기 전에 fresh cookie 를 확보한다.
-DEFAULT_IDLE_TIMEOUT = 25 * 60  # 25분
+# 회사 Spring 서버의 idle session timeout 보다 충분히 짧게 잡아 stale cookie 가
+# 회사 API 까지 도달하지 않게 한다. 5분 — 보수적 default.
+DEFAULT_IDLE_TIMEOUT = 5 * 60  # 5분
 
 # 세션 만료 시 서버가 보내는 로그인 리디렉트 경로 패턴
 _LOGIN_PATH_MARKERS: tuple[str, ...] = ("/home/login", "/home/logout")
