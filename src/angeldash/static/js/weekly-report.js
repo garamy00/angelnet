@@ -1,4 +1,5 @@
 import { apiGet, apiPut, apiPost, isoWeek, weekDates, toast } from './api.js';
+import { initOngoingSchedule } from './ongoing_schedule.js';
 
 const COL_KEYS = ['last_week', 'this_week', 'next_week', 'note'];
 const COL_HEADERS = ['프로젝트', '지난주 한 일', '이번주 한 일/할 일', '다음주 할 일', '비고'];
@@ -289,3 +290,4 @@ document.getElementById('btn-upnote-weekly').addEventListener('click', async () 
 
 loadWeek();
 loadWeeklyNotebookId();
+initOngoingSchedule();
