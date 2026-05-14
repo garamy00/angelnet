@@ -33,21 +33,24 @@ def _prev_week_iso(week_iso: str) -> str:
     return f"{iso.year}-W{iso.week:02d}"
 
 
-def _build_project_map(conn: sqlite3.Connection) -> dict[str, str]:
-    """category(원본 텍스트) → project_name 맵.
+def _build_project_map(
+    conn: sqlite3.Connection,
+) -> dict[str, tuple[str | None, str | None]]:
+    """category(원본 텍스트) → (weekly_project_name, timesheet_project_name) 맵.
 
-    mappings 테이블 + pattern_mappings 테이블 양쪽을 사용해, 일반 매핑이 없으면
-    pattern substring 매치도 시도.
+    각 튜플의 첫 요소가 trim 후 비어있지 않으면 _resolve_project 가 그 값을 우선
+    사용. 둘 다 None 이면 매핑 누락 처리.
     """
-    # 일반 카테고리 매핑
-    out: dict[str, str] = {}
+    out: dict[str, tuple[str | None, str | None]] = {}
     cur = conn.execute(
-        "SELECT m.category, p.name FROM mappings m "
-        "JOIN projects p ON p.id = m.project_id "
+        "SELECT m.category, m.weekly_project_name, p.name "
+        "FROM mappings m "
+        "LEFT JOIN projects p ON p.id = m.project_id "
         "WHERE m.excluded = 0"
     )
     for row in cur:
-        out[row["category"]] = row["name"]
+        weekly = (row["weekly_project_name"] or "").strip() or None
+        out[row["category"]] = (weekly, row["name"])
     return out
 
 
@@ -65,11 +68,24 @@ def _build_pattern_map(conn: sqlite3.Connection) -> list[tuple[str, str]]:
 
 
 def _resolve_project(
-    category: str, cat_map: dict[str, str], pat_list: list[tuple[str, str]]
+    category: str,
+    cat_map: dict[str, tuple[str | None, str | None]],
+    pat_list: list[tuple[str, str]],
 ) -> str:
-    """카테고리 텍스트 → 프로젝트명. 매핑 없으면 _FALLBACK_PROJECT."""
+    """카테고리 텍스트 → 프로젝트명.
+
+    우선순위 (높음 → 낮음):
+    1) mappings.weekly_project_name (trim 후 비어있지 않은 경우)
+    2) mappings → projects.name (타임시트 프로젝트명)
+    3) pattern_mappings substring 매칭
+    4) _FALLBACK_PROJECT ('(매핑 없음)')
+    """
     if category in cat_map:
-        return cat_map[category]
+        weekly, project = cat_map[category]
+        if weekly:
+            return weekly
+        if project:
+            return project
     for pat, name in pat_list:
         if pat and pat in category:
             return name

@@ -160,3 +160,72 @@ def test_merge_bodies_single_body_unchanged() -> None:
 def test_merge_bodies_empty_list_returns_empty() -> None:
     """빈 입력 → 빈 출력."""
     assert weekly_table._merge_bodies([]) == ""
+
+
+# ─── weekly_project_name 우선순위 + 머지 ─────────────
+
+
+def test_resolve_project_prefers_weekly_name(seeded_conn) -> None:
+    """weekly_project_name 이 설정된 카테고리는 그 이름이 우선."""
+    seeded_conn.execute(
+        "UPDATE mappings SET weekly_project_name = 'OAM 통합' "
+        "WHERE category = '차세대OAM'"
+    )
+    seeded_conn.commit()
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+    )
+    names = [r["project_name"] for r in rows]
+    assert "OAM 통합" in names  # weekly_project_name 적용
+    assert "OAM 공통" not in names  # 기존 타임시트 project name 은 빠짐
+
+
+def test_resolve_project_falls_back_to_project_name_when_weekly_empty(
+    seeded_conn,
+) -> None:
+    """weekly_project_name 비어있으면 기존 타임시트 project name 사용."""
+    # weekly_project_name 미설정 (default NULL) 상태
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+    )
+    names = [r["project_name"] for r in rows]
+    assert "OAM 공통" in names  # 기존 동작 보존
+
+
+def test_resolve_project_treats_whitespace_as_unset(seeded_conn) -> None:
+    """공백만 들어간 weekly_project_name 은 미설정으로 취급."""
+    seeded_conn.execute(
+        "UPDATE mappings SET weekly_project_name = '   ' "
+        "WHERE category = '차세대OAM'"
+    )
+    seeded_conn.commit()
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+    )
+    names = [r["project_name"] for r in rows]
+    assert "OAM 공통" in names  # whitespace 만 → fallback
+
+
+def test_two_categories_same_weekly_name_merged_into_one_row(
+    seeded_conn,
+) -> None:
+    """같은 weekly_project_name 인 카테고리들의 entries 가 한 행으로 머지."""
+    seeded_conn.execute(
+        "UPDATE mappings SET weekly_project_name = '통합' "
+        "WHERE category = '차세대OAM'"
+    )
+    seeded_conn.execute(
+        "UPDATE mappings SET weekly_project_name = '통합' "
+        "WHERE category = 'SMSC 리빌딩'"
+    )
+    seeded_conn.commit()
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+    )
+    names = [r["project_name"] for r in rows]
+    # '통합' 행이 정확히 1개, 두 카테고리의 entries 가 합쳐짐
+    assert names.count("통합") == 1
+    merged = next(r for r in rows if r["project_name"] == "통합")
+    # 두 카테고리 모두의 body 가 this_week 셀에 포함
+    assert "차세대OAM" in merged["this_week"] or "OAM" in merged["this_week"]
+    assert "SMSC" in merged["this_week"]
