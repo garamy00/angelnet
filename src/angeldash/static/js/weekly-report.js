@@ -1,6 +1,7 @@
 import { apiGet, apiPut, apiPost, isoWeek, weekDates, toast } from './api.js';
 import { initHeader } from './header.js';
 import { initOngoingSchedule } from './ongoing_schedule.js';
+import { enableColumnResize } from './resizable_columns.js';
 import { loadWeekSidebar, highlightCurrent } from './week_sidebar.js';
 
 const COL_KEYS = ['last_week', 'this_week', 'next_week', 'note'];
@@ -493,6 +494,7 @@ loadWeek();
 loadCachedSettings();
 initHeader();
 initOngoingSchedule();
+enableColumnResize(document.getElementById('weekly-table'));
 loadWeekSidebar({
   indexUrl: '/api/weekly-reports',
   currentWeek,
