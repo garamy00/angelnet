@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPut, apiDelete, toast } from './api.js';
+import { initHeader } from './header.js';
 
 const AUTO_TASK_OPTIONS = ['개발', '시험/지원', '영업'];
 const AUTO_TASK_DEFAULT = '개발';
@@ -314,3 +315,4 @@ document.getElementById('add-pattern').addEventListener('click', async () => {
   await loadAutoTaskRadios();
   await refreshAll();
 })();
+initHeader();

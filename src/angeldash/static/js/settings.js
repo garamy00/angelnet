@@ -1,4 +1,5 @@
 import { apiGet, apiPut, apiPost, isoWeek, toast } from './api.js';
+import { initHeader } from './header.js';
 
 // text 필드들. join.auto_task_name 은 /projects.html 의 라디오로 이동.
 const KEYS = {
@@ -157,3 +158,4 @@ saveBtn.addEventListener('click', async () => {
 
 load();
 refreshEmailPasswordStatus();
+initHeader();

@@ -1,4 +1,5 @@
 import { apiGet } from './api.js';
+import { initHeader } from './header.js';
 
 async function load() {
   const items = await apiGet('/api/logs');
@@ -18,3 +19,4 @@ async function load() {
 }
 
 load();
+initHeader();

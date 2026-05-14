@@ -1,4 +1,5 @@
 import { apiGet, apiPut, apiPost, isoWeek, weekDates, toast } from './api.js';
+import { initHeader } from './header.js';
 import { initOngoingSchedule } from './ongoing_schedule.js';
 
 const COL_KEYS = ['last_week', 'this_week', 'next_week', 'note'];
@@ -486,4 +487,5 @@ document.getElementById('btn-upnote-weekly').addEventListener('click', async () 
 
 loadWeek();
 loadCachedSettings();
+initHeader();
 initOngoingSchedule();

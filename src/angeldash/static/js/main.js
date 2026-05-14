@@ -3,19 +3,11 @@ import {
   isoWeek, weekDates, formatDateLabel,
   debounce, toast,
 } from './api.js';
+import { initHeader } from './header.js';
 import { initOngoingSchedule } from './ongoing_schedule.js';
 
 let currentWeek = isoWeek(new Date());
 let currentData = { days: [], note: '', vacations: [], holidays: [] };
-
-async function loadMe() {
-  try {
-    const me = await apiGet('/api/me');
-    document.getElementById('user-label').textContent = `${me.name}(${me.user_id})`;
-  } catch (e) {
-    document.getElementById('user-label').textContent = '(로그인 실패)';
-  }
-}
 
 async function loadWeek() {
   const months = monthsForWeek(currentWeek);
@@ -709,8 +701,8 @@ document.getElementById('btn-monthly-preview').addEventListener('click', async (
 });
 
 (async () => {
-  await loadMe();
   await loadWeek();
 })();
 
+initHeader();
 initOngoingSchedule();
