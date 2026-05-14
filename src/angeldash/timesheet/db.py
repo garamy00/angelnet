@@ -172,6 +172,7 @@ def _migrate_mappings_add_weekly_project_name(conn: sqlite3.Connection) -> None:
     if "weekly_project_name" in cols:
         return
     conn.execute("ALTER TABLE mappings ADD COLUMN weekly_project_name TEXT")
+    logger.info("Migrated mappings table: added weekly_project_name column")
     conn.commit()
 
 

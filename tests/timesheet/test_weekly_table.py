@@ -229,3 +229,5 @@ def test_two_categories_same_weekly_name_merged_into_one_row(
     # 두 카테고리 모두의 body 가 this_week 셀에 포함
     assert "차세대OAM" in merged["this_week"] or "OAM" in merged["this_week"]
     assert "SMSC" in merged["this_week"]
+    # last_week 도 머지 — 차세대OAM 의 지난주 entry (설계 문서) 가 통합 행에 합쳐짐
+    assert "설계 문서" in merged["last_week"]
