@@ -166,6 +166,23 @@ def register_routes(app: FastAPI) -> None:
 
     # ─── Reports API ────────────────────────────────
 
+    @app.get("/api/weeks/index")
+    async def list_weeks_index_route(conn=Depends(get_conn)) -> list[dict]:
+        """일일업무보고 사이드바용 — 데이터가 있는 주차 list (최신순).
+
+        days 테이블에 entry 가 있는 week 또는 week_notes 가 채워진 week 포함.
+        """
+        rows = conn.execute(
+            "SELECT DISTINCT week_iso FROM ("
+            "  SELECT week_iso FROM days "
+            "  WHERE EXISTS (SELECT 1 FROM entries e WHERE e.date = days.date)"
+            "  UNION "
+            "  SELECT week_iso FROM week_notes WHERE TRIM(body_md) != ''"
+            ") "
+            "ORDER BY week_iso DESC"
+        ).fetchall()
+        return [{"week_iso": r["week_iso"]} for r in rows]
+
     @app.get("/api/weeks/{week_iso}")
     async def get_week_route(
         week_iso: str, conn=Depends(get_conn)
@@ -952,6 +969,23 @@ def register_routes(app: FastAPI) -> None:
     # ─── Weekly Report API ───────────────────────────────
 
     from . import weekly_table as weekly_module
+
+    @app.get("/api/weekly-reports")
+    async def list_weekly_reports_route(
+        conn=Depends(get_conn),
+    ) -> list[dict]:
+        """주간업무보고 사이드바용 — 저장된 보고서 list (최신순).
+
+        weekly_reports 테이블의 모든 row 의 week_iso 와 updated_at 만 반환.
+        """
+        rows = conn.execute(
+            "SELECT week_iso, updated_at FROM weekly_reports "
+            "ORDER BY week_iso DESC"
+        ).fetchall()
+        return [
+            {"week_iso": r["week_iso"], "updated_at": r["updated_at"]}
+            for r in rows
+        ]
 
     @app.get("/api/weekly-reports/{week_iso}")
     async def get_weekly_report_route(

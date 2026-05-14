@@ -140,6 +140,69 @@ def test_put_week_note_persists(api):
     assert g.json()["body_md"] == "메모 본문"
 
 
+def test_weeks_index_returns_weeks_with_entries(api):
+    """/api/weeks/index — entries 가 있는 주차를 최신순으로 반환."""
+    # W18 / W19 / W20 에 entries 작성
+    api.put("/api/days/2026-04-27", json={
+        "week_iso": "2026-W18",
+        "entries": [{"category": "X", "hours": 1, "body_md": ""}],
+    })
+    api.put("/api/days/2026-05-04", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "Y", "hours": 1, "body_md": ""}],
+    })
+    api.put("/api/days/2026-05-11", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "Z", "hours": 1, "body_md": ""}],
+    })
+
+    r = api.get("/api/weeks/index")
+    assert r.status_code == 200
+    items = r.json()
+    weeks = [it["week_iso"] for it in items]
+    # 최신순
+    assert weeks == ["2026-W20", "2026-W19", "2026-W18"]
+
+
+def test_weeks_index_also_includes_weeks_with_only_notes(api):
+    """entries 없이 week_notes 만 있는 주차도 포함."""
+    api.put("/api/weeks/2026-W22/note", json={"body_md": "주간 메모"})
+
+    r = api.get("/api/weeks/index")
+    weeks = [it["week_iso"] for it in r.json()]
+    assert "2026-W22" in weeks
+
+
+def test_weeks_index_excludes_empty_weeks(api):
+    """entries 없고 note 도 비어있는 주차는 list 에 포함 X."""
+    api.put("/api/weeks/2026-W21/note", json={"body_md": ""})
+
+    r = api.get("/api/weeks/index")
+    weeks = [it["week_iso"] for it in r.json()]
+    assert "2026-W21" not in weeks
+
+
+def test_weekly_reports_list_returns_saved_weeks(api):
+    """/api/weekly-reports (list) — weekly_reports 테이블의 row 를 최신순으로."""
+    api.put("/api/weekly-reports/2026-W20", json={"rows": [
+        {"project_name": "P", "last_week": "", "this_week": "x",
+         "next_week": "", "note": ""},
+    ]})
+    api.put("/api/weekly-reports/2026-W19", json={"rows": [
+        {"project_name": "Q", "last_week": "", "this_week": "y",
+         "next_week": "", "note": ""},
+    ]})
+
+    r = api.get("/api/weekly-reports")
+    assert r.status_code == 200
+    items = r.json()
+    weeks = [it["week_iso"] for it in items]
+    assert weeks == ["2026-W20", "2026-W19"]
+    # updated_at 도 동봉
+    for it in items:
+        assert it.get("updated_at")
+
+
 def test_create_and_list_projects(api):
     r = api.post(
         "/api/projects",

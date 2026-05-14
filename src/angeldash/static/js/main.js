@@ -5,6 +5,7 @@ import {
 } from './api.js';
 import { initHeader } from './header.js';
 import { initOngoingSchedule } from './ongoing_schedule.js';
+import { loadWeekSidebar, highlightCurrent } from './week_sidebar.js';
 
 let currentWeek = isoWeek(new Date());
 let currentData = { days: [], note: '', vacations: [], holidays: [] };
@@ -299,14 +300,17 @@ document.getElementById('week-note').addEventListener(
 document.getElementById('this-week').addEventListener('click', () => {
   currentWeek = isoWeek(new Date());
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 document.getElementById('prev-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, -1);
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 document.getElementById('next-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, +1);
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 
 function shiftWeek(weekIso, delta) {
@@ -702,7 +706,18 @@ document.getElementById('btn-monthly-preview').addEventListener('click', async (
 
 (async () => {
   await loadWeek();
+  // 주차 이동 후 사이드바 highlight 만 갱신
+  highlightCurrent(currentWeek);
 })();
 
 initHeader();
 initOngoingSchedule();
+loadWeekSidebar({
+  indexUrl: '/api/weeks/index',
+  currentWeek,
+  navigate: (weekIso) => {
+    currentWeek = weekIso;
+    loadWeek();
+    highlightCurrent(weekIso);
+  },
+});

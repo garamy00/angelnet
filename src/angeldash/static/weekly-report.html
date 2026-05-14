@@ -21,7 +21,14 @@
       <button id="btn-refresh" title="새로고침">🔄</button>
     </div>
   </header>
-  <main>
+  <main class="with-sidebar">
+    <aside class="week-sidebar">
+      <div class="week-sidebar-header">📂 저장된 보고서</div>
+      <div id="week-sidebar-list" class="week-sidebar-list">
+        <div class="muted">로딩…</div>
+      </div>
+    </aside>
+    <div class="main-content">
     <details id="ongoing-schedule">
       <summary>
         <span>📌 진행중인 일정</span>
@@ -82,6 +89,7 @@
         <button id="btn-regenerate" title="last_week/this_week 만 다시 자동 채움 (다음주/비고 보존)">🔄 재생성</button>
       </div>
     </section>
+    </div>
   </main>
   <script type="module" src="/static/js/weekly-report.js"></script>
 </body>

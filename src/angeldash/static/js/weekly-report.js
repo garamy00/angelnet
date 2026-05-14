@@ -1,6 +1,7 @@
 import { apiGet, apiPut, apiPost, isoWeek, weekDates, toast } from './api.js';
 import { initHeader } from './header.js';
 import { initOngoingSchedule } from './ongoing_schedule.js';
+import { loadWeekSidebar, highlightCurrent } from './week_sidebar.js';
 
 const COL_KEYS = ['last_week', 'this_week', 'next_week', 'note'];
 const COL_HEADERS = ['프로젝트', '지난주 한 일', '이번주 한 일/할 일', '다음주 할 일', '비고'];
@@ -249,16 +250,19 @@ document.getElementById('this-week').addEventListener('click', () => {
   currentWeek = isoWeek(new Date());
   syncUrlToCurrentWeek();
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 document.getElementById('prev-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, -1);
   syncUrlToCurrentWeek();
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 document.getElementById('next-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, +1);
   syncUrlToCurrentWeek();
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 
 // ─── 본문 빌더 (HTML / 마크다운 / 이메일 전체) ────
@@ -489,3 +493,13 @@ loadWeek();
 loadCachedSettings();
 initHeader();
 initOngoingSchedule();
+loadWeekSidebar({
+  indexUrl: '/api/weekly-reports',
+  currentWeek,
+  navigate: (weekIso) => {
+    currentWeek = weekIso;
+    syncUrlToCurrentWeek();
+    loadWeek();
+    highlightCurrent(weekIso);
+  },
+});
