@@ -36,6 +36,7 @@ class MappingInput(BaseModel):
 
     project_id: int | None = None
     excluded: bool = False
+    weekly_project_name: str | None = None
 
 
 class SettingsPreviewInput(BaseModel):
@@ -308,6 +309,7 @@ def register_routes(app: FastAPI) -> None:
             category,
             project_id=payload.project_id,
             excluded=payload.excluded,
+            weekly_project_name=payload.weekly_project_name,
         )
         return {"ok": True}
 

@@ -89,11 +89,13 @@ class Mapping(BaseModel):
 
     project_id 가 None 이고 excluded=True 면 의도적으로 타임시트 미입력.
     project_id 가 None 이고 excluded=False 면 매핑이 누락된 상태.
+    weekly_project_name 은 주간업무보고에서 사용할 별도 이름 (None=미설정).
     """
 
     category: str
     project_id: int | None = None
     excluded: bool = False
+    weekly_project_name: str | None = None
 
 
 class ActionLog(BaseModel):

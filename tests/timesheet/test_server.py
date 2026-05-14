@@ -668,6 +668,40 @@ def test_remote_tasks_backfills_legacy_empty_work_type(api, mock_client):
     assert legacy[0]["work_type"] == "개발"
 
 
+def test_put_mapping_with_weekly_project_name(api):
+    """PUT /api/mappings/{category} 가 weekly_project_name 을 받아 GET 응답에 반환."""
+    # 프로젝트 1개 등록
+    r = api.post("/api/projects", json={"name": "X 프로젝트", "active": True})
+    assert r.status_code == 200
+    project_id = r.json()["id"]
+    # mapping PUT
+    r = api.put(
+        "/api/mappings/EM 고도화",
+        json={
+            "project_id": project_id,
+            "excluded": False,
+            "weekly_project_name": "OAM",
+        },
+    )
+    assert r.status_code == 200
+    # GET 응답 검증
+    items = {m["category"]: m for m in api.get("/api/mappings").json()}
+    assert items["EM 고도화"]["weekly_project_name"] == "OAM"
+
+    # 빈 문자열 → None 정규화 round-trip
+    r = api.put(
+        "/api/mappings/EM 고도화",
+        json={
+            "project_id": project_id,
+            "excluded": False,
+            "weekly_project_name": "   ",
+        },
+    )
+    assert r.status_code == 200
+    items = {m["category"]: m for m in api.get("/api/mappings").json()}
+    assert items["EM 고도화"]["weekly_project_name"] is None
+
+
 def test_remote_tasks_default_year_month(api, mock_client):
     """year_month 미지정 시 현재 달이 사용된다."""
     import datetime as _dt
