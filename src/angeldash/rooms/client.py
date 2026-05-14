@@ -28,7 +28,10 @@ SPRING_BASE = "https://timesheet.uangel.com/times/application/meeting_room/api"
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X)"
 HTTP_TIMEOUT = 15.0
 BOT_BLOCK_MARKER = "Automated requests are not allowed"
-SESSION_TTL = 24 * 3600  # 24h
+# 회의실 페이지는 호출이 드물어 (페이지 진입 시 한 번만) 만료된 cookie 를 그대로
+# 쓸 위험이 크다. 회사 Spring 서버의 실제 idle TTL 보다 짧게 잡아, 페이지를 새로
+# 열 때마다 me 핸들러가 강제로 fresh login 수행하도록 한다.
+SESSION_TTL = 25 * 60  # 25분
 
 
 def _is_bot_blocked(payload: Any) -> bool:
