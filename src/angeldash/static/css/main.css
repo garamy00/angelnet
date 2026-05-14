@@ -768,7 +768,9 @@ table.monthly-grid .cell.bg-hol {
 }
 
 /* ─── 히트맵 셀 색상 ────────────────────────────── */
-/* task: cyan 톤. hours 증가에 따라 배경 alpha 진해짐. 글자색은 대비 보장. */
+/* 원칙: 다크 surface 위라 배경 alpha 가 낮을수록 surface 가 비쳐 흐림.
+   글자는 모든 단계에서 밝은 톤 유지 — 항상 contrast 확보. 강도는 배경
+   alpha 와 font-weight 로 표현한다. */
 table.monthly-grid td.cell {
   transition: filter 120ms ease;
   font-weight: 500;
@@ -776,55 +778,62 @@ table.monthly-grid td.cell {
 table.monthly-grid td.cell:hover {
   filter: brightness(1.25);
 }
-/* task heatmap: 청록 톤. 0 은 투명, 1~5 는 점점 진하게 */
-table.monthly-grid .cell.task-l0 { color: #4a525e; }
+/* 빈 셀 (0h) — 값이 없어 color 영향 적지만, 만약 표시되면 dim */
+table.monthly-grid .cell.task-l0,
+table.monthly-grid .cell.vac-l0 { color: #4a525e; }
+
+/* task heatmap (cyan) — alpha 증가, 글자는 항상 밝은 흰-시안 */
 table.monthly-grid .cell.task-l1 {
-  background: rgba(56, 189, 248, 0.08);
-  color: #7dd3fc;
-}
-table.monthly-grid .cell.task-l2 {
-  background: rgba(56, 189, 248, 0.22);
-  color: #bae6fd;
-}
-table.monthly-grid .cell.task-l3 {
-  background: rgba(56, 189, 248, 0.42);
-  color: #e0f2fe;
+  background: rgba(56, 189, 248, 0.12);
+  color: #f0f9ff;  /* 거의 흰 — 옅은 bg 도 잘 보임 */
   font-weight: 600;
 }
+table.monthly-grid .cell.task-l2 {
+  background: rgba(56, 189, 248, 0.30);
+  color: #f0f9ff;
+  font-weight: 600;
+}
+table.monthly-grid .cell.task-l3 {
+  background: rgba(56, 189, 248, 0.50);
+  color: #fff;
+  font-weight: 700;
+}
 table.monthly-grid .cell.task-l4 {
-  background: rgba(56, 189, 248, 0.62);
+  background: rgba(56, 189, 248, 0.72);
   color: #fff;
   font-weight: 700;
 }
 table.monthly-grid .cell.task-l5 {
-  background: rgba(244, 114, 182, 0.65);  /* 분홍 — overtime */
+  background: rgba(244, 114, 182, 0.75);  /* 분홍 — overtime */
+  color: #fff;
+  font-weight: 800;
+}
+
+/* 휴가 heatmap (violet) — task 와 톤만 다르고 contrast 원칙은 동일 */
+table.monthly-grid .cell.vac-l1 {
+  background: rgba(167, 139, 250, 0.16);
+  color: #faf5ff;
+  font-weight: 600;
+}
+table.monthly-grid .cell.vac-l2 {
+  background: rgba(167, 139, 250, 0.36);
+  color: #faf5ff;
+  font-weight: 600;
+}
+table.monthly-grid .cell.vac-l3 {
+  background: rgba(167, 139, 250, 0.55);
   color: #fff;
   font-weight: 700;
 }
-/* 휴가 heatmap: 보라 톤 — task 와 톤 자체로 구분 */
-table.monthly-grid .cell.vac-l0 { color: #4a525e; }
-table.monthly-grid .cell.vac-l1 {
-  background: rgba(167, 139, 250, 0.12);
-  color: #c4b5fd;
-}
-table.monthly-grid .cell.vac-l2 {
-  background: rgba(167, 139, 250, 0.30);
-  color: #ddd6fe;
-}
-table.monthly-grid .cell.vac-l3 {
-  background: rgba(167, 139, 250, 0.50);
-  color: #f5f3ff;
-  font-weight: 600;
-}
 table.monthly-grid .cell.vac-l4 {
-  background: rgba(167, 139, 250, 0.70);
+  background: rgba(167, 139, 250, 0.75);
   color: #fff;
   font-weight: 700;
 }
 table.monthly-grid .cell.vac-l5 {
-  background: rgba(167, 139, 250, 0.85);
+  background: rgba(167, 139, 250, 0.90);
   color: #fff;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 /* 휴가 row 그룹 — task 와 시각 구분 */
@@ -832,8 +841,9 @@ table.monthly-grid tr.vac-first td {
   border-top: 2px solid var(--color-accent);
 }
 table.monthly-grid tr.vac-row .task-col {
-  color: #c4b5fd;
+  color: #ddd6fe;  /* 진한 보라 surface 위 — 더 밝은 라일락으로 contrast */
   background: #2a2738;
+  font-weight: 600;
 }
 
 /* ─── 미리보기 모달 ─────────────────────────────── */
