@@ -606,16 +606,25 @@ function renderMonthlyGrid(data) {
     return KR_DAY_SHORT[dow];
   };
 
-  // 셀 색상 — 빈/부분/8h+. wknd / hol 배경은 별도 클래스.
-  const cellClasses = (h, d) => {
+  // 히트맵 단계 — hours / 8 비율을 alpha 로. 8h+ 는 한 단계 더 진하게.
+  // 0=투명, 1=옅음, 2=중간, 3=진함, 4=가장 진함 (overtime)
+  const heatLevel = (h) => {
+    if (!h || h <= 0) return 0;
+    if (h <= 2) return 1;
+    if (h <= 4) return 2;
+    if (h <= 7) return 3;
+    if (h <= 8) return 4;
+    return 5;  // overtime
+  };
+
+  const cellClasses = (h, d, kind = 'task') => {
     const dow = dayOfWeek(d);
     const bg = holidayDays.has(d)
       ? 'bg-hol'
       : ((dow === 0 || dow === 6) ? 'bg-wknd' : '');
-    let v = 'empty';
-    if (h >= 8) v = 'full';
-    else if (h > 0) v = 'partial';
-    return `cell ${bg} ${v}`;
+    const lvl = heatLevel(h);
+    const prefix = kind === 'vac' ? 'vac-l' : 'task-l';
+    return `cell ${bg} ${prefix}${lvl}`;
   };
 
   // 헤더
@@ -627,6 +636,12 @@ function renderMonthlyGrid(data) {
   }
   thead += '<th class="total-col">합계</th></tr></thead>';
 
+  // 셀 tooltip — hours + day 정보
+  const cellTitle = (h, d) => {
+    if (!h) return '';
+    return ` title="${d}일: ${h}h"`;
+  };
+
   // 본문 — task rows
   let tbody = '<tbody>';
   for (const t of data.tasks) {
@@ -634,7 +649,7 @@ function renderMonthlyGrid(data) {
     tbody += `<td class="task-col" title="${esc(t.task_name)}">${esc(t.task_name)}</td>`;
     for (let d = 1; d <= dim; d += 1) {
       const h = t.days[d] || 0;
-      tbody += `<td class="${cellClasses(h, d)}">${h || ''}</td>`;
+      tbody += `<td class="${cellClasses(h, d, 'task')}"${cellTitle(h, d)}>${h || ''}</td>`;
     }
     tbody += `<td class="total-col"><b>${t.total}</b></td>`;
     tbody += '</tr>';
@@ -649,7 +664,7 @@ function renderMonthlyGrid(data) {
       tbody += `<td class="task-col vac-label" title="휴가 — ${esc(v.label)}">🏖 휴가 — ${esc(v.label)}</td>`;
       for (let d = 1; d <= dim; d += 1) {
         const h = v.days[d] || 0;
-        tbody += `<td class="${cellClasses(h, d)} vac-cell">${h || ''}</td>`;
+        tbody += `<td class="${cellClasses(h, d, 'vac')}"${cellTitle(h, d)}>${h || ''}</td>`;
       }
       tbody += `<td class="total-col"><b>${v.total}</b></td>`;
       tbody += '</tr>';
@@ -661,7 +676,7 @@ function renderMonthlyGrid(data) {
   let tfoot = '<tfoot><tr><td class="task-col"><b>일별 합계</b></td>';
   for (let d = 1; d <= dim; d += 1) {
     const h = data.daily_totals[d] || 0;
-    tfoot += `<td class="${cellClasses(h, d)}"><b>${h || ''}</b></td>`;
+    tfoot += `<td class="${cellClasses(h, d, 'task')}"${cellTitle(h, d)}><b>${h || ''}</b></td>`;
   }
   tfoot += `<td class="total-col"><b>${data.month_total}</b></td>`;
   tfoot += '</tr></tfoot>';

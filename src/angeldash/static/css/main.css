@@ -767,17 +767,64 @@ table.monthly-grid .cell.bg-hol {
   background: rgba(248, 113, 113, 0.08);
 }
 
-/* 셀 글자 색 — 빈/부분/풀 */
-table.monthly-grid .cell.empty {
-  color: #4a525e;
+/* ─── 히트맵 셀 색상 ────────────────────────────── */
+/* task: cyan 톤. hours 증가에 따라 배경 alpha 진해짐. 글자색은 대비 보장. */
+table.monthly-grid td.cell {
+  transition: filter 120ms ease;
+  font-weight: 500;
 }
-table.monthly-grid .cell.full {
-  color: #4ade80;
+table.monthly-grid td.cell:hover {
+  filter: brightness(1.25);
+}
+/* task heatmap: 청록 톤. 0 은 투명, 1~5 는 점점 진하게 */
+table.monthly-grid .cell.task-l0 { color: #4a525e; }
+table.monthly-grid .cell.task-l1 {
+  background: rgba(56, 189, 248, 0.08);
+  color: #7dd3fc;
+}
+table.monthly-grid .cell.task-l2 {
+  background: rgba(56, 189, 248, 0.22);
+  color: #bae6fd;
+}
+table.monthly-grid .cell.task-l3 {
+  background: rgba(56, 189, 248, 0.42);
+  color: #e0f2fe;
   font-weight: 600;
 }
-table.monthly-grid .cell.partial {
-  color: #fde047;
+table.monthly-grid .cell.task-l4 {
+  background: rgba(56, 189, 248, 0.62);
+  color: #fff;
+  font-weight: 700;
+}
+table.monthly-grid .cell.task-l5 {
+  background: rgba(244, 114, 182, 0.65);  /* 분홍 — overtime */
+  color: #fff;
+  font-weight: 700;
+}
+/* 휴가 heatmap: 보라 톤 — task 와 톤 자체로 구분 */
+table.monthly-grid .cell.vac-l0 { color: #4a525e; }
+table.monthly-grid .cell.vac-l1 {
+  background: rgba(167, 139, 250, 0.12);
+  color: #c4b5fd;
+}
+table.monthly-grid .cell.vac-l2 {
+  background: rgba(167, 139, 250, 0.30);
+  color: #ddd6fe;
+}
+table.monthly-grid .cell.vac-l3 {
+  background: rgba(167, 139, 250, 0.50);
+  color: #f5f3ff;
   font-weight: 600;
+}
+table.monthly-grid .cell.vac-l4 {
+  background: rgba(167, 139, 250, 0.70);
+  color: #fff;
+  font-weight: 700;
+}
+table.monthly-grid .cell.vac-l5 {
+  background: rgba(167, 139, 250, 0.85);
+  color: #fff;
+  font-weight: 700;
 }
 
 /* 휴가 row 그룹 — task 와 시각 구분 */
@@ -785,14 +832,8 @@ table.monthly-grid tr.vac-first td {
   border-top: 2px solid var(--color-accent);
 }
 table.monthly-grid tr.vac-row .task-col {
-  color: #a78bfa;
-  background: #2a2738;
-}
-table.monthly-grid tr.vac-row .vac-cell {
   color: #c4b5fd;
-}
-table.monthly-grid tr.vac-row .vac-cell.empty {
-  color: #4a525e;
+  background: #2a2738;
 }
 
 /* ─── 미리보기 모달 ─────────────────────────────── */
