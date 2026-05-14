@@ -120,7 +120,7 @@ def build_week_context(
     days = []
     for d in week:
         if not d["entries"]:
-            # 빈 날도 meta 가 있을 수 있지만 정책: entries 가 비면 day 자체 제외 (기존 동작)
+            # 빈 날에 meta 가 있어도 정책상 entries 비면 day 자체 제외 (기존 동작)
             continue
         meta = db.get_daily_meta(conn, d["date"])
         day_obj = _day_obj(d["date"], d["entries"])
@@ -179,7 +179,7 @@ def build_team_report_context(
                 entries.append(_entry_dict({**e, "date": day["date"]}))
         target_label = "이번 주 전체"
         globals_ = _week_globals(week_iso)
-        # 주 단위: team-report 는 보통 일일 단위. 주 단위에서는 source_commit/misc_note 미사용.
+        # team-report 는 보통 일일 단위 — 주 단위에선 source_commit/misc_note 미사용.
         source_commit = "none"
         misc_note = ""
 
@@ -188,7 +188,9 @@ def build_team_report_context(
         "entries": entries,
         "target_label": target_label,
         "source_commit": source_commit,
-        "source_commit_label": db.SOURCE_COMMIT_LABELS.get(source_commit, source_commit),
+        "source_commit_label": db.SOURCE_COMMIT_LABELS.get(
+            source_commit, source_commit,
+        ),
         "misc_note": misc_note,
     }
 

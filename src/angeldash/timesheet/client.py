@@ -15,8 +15,8 @@ from urllib.parse import urlencode
 
 import httpx
 
-from .._common.http_relogin import AutoReloginHttp
 from .._common.errors import ApiError, AuthError, BotBlockedError
+from .._common.http_relogin import AutoReloginHttp
 from .models import User
 
 logger = logging.getLogger(__name__)
@@ -446,8 +446,9 @@ class TimesheetClient:
             if not name:
                 continue
             day_hours: dict[int, float] = {}
-            # jobtime grid 의 data 형식: [task_name, work_type, 1일, 2일, ..., 말일, 월합계]
-            # data[2..-2] 가 일별 시간. (vacation grid 는 work_type 컬럼이 없어 data[1..-1].)
+            # jobtime grid data 형식:
+            #   [task_name, work_type, 1일, 2일, ..., 말일, 월합계]
+            # data[2..-2] 가 일별 시간. (vacation grid 는 work_type 없어 data[1..-1])
             for day, value in enumerate(data[2:-1], start=1):
                 try:
                     h = float(value)
@@ -474,11 +475,12 @@ class TimesheetClient:
         """연간 휴가 사용/잔여 일수.
 
         Returns:
-            {"total": 23.0, "used": 9.0, "remaining": 14.0} — 파싱 실패 시 raw_text 포함.
-            서버 응답은 따옴표로 감싸진 URL-encoded 문자열 (예: '"23.0+-+9.0+%3D+14.0+%EC%9D%BC"').
+            {"total": 23.0, "used": 9.0, "remaining": 14.0}
+            파싱 실패 시 raw_text 포함. 서버 응답은 따옴표로 감싸진 URL-encoded
+            문자열 (예: '"23.0+-+9.0+%3D+14.0+%EC%9D%BC"').
         """
-        from urllib.parse import unquote
         import re as _re
+        from urllib.parse import unquote
 
         resp = await self._http.get(
             self.VACATION_ANNUAL_URL,
@@ -557,7 +559,7 @@ class TimesheetClient:
     async def download_jobtime_excel(self, *, year_month: str) -> tuple[bytes, str]:
         """그 달의 jobtime Excel(xlsx) 을 받아 (content, filename) 반환.
 
-        filename 은 회사 서버가 Content-Disposition 으로 알려주는 그대로 (URL 디코드 적용).
+        filename 은 회사 서버 Content-Disposition 그대로 (URL 디코드 적용).
         """
         from urllib.parse import unquote
 
@@ -866,8 +868,8 @@ class TimesheetClient:
     async def unjoin_project(self, *, project_id: str) -> None:
         """프로젝트 + 모든 task 동시 탈퇴.
 
-        회사 시스템에는 프로젝트 단독 탈퇴 API 가 없음 (UserMapJoinSave C002002 는 no-op).
-        실제 동작: tasksMapDelAll.htm 가 task 전부 삭제 + 프로젝트도 자동 탈퇴 (cascade).
+        회사에는 프로젝트 단독 탈퇴 API 가 없음 (UserMapJoinSave C002002 는 no-op).
+        실제 동작: tasksMapDelAll.htm 가 task 모두 삭제 + 프로젝트 자동 탈퇴 (cascade).
         단 가입 task 가 0개면 tasksMapDelAll 이 success=false 를 반환하므로,
         그 경우엔 임의 task 1개를 임시로 가입한 뒤 즉시 DelAll 로 같이 삭제.
         """

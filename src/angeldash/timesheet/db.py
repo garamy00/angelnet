@@ -136,8 +136,8 @@ def _migrate_projects_add_work_type(conn: sqlite3.Connection) -> None:
     """기존 projects 테이블에 work_type 컬럼이 없으면 추가하고 UNIQUE 재구성.
 
     SQLite 는 ALTER TABLE 로 UNIQUE 제약 변경 불가 → 테이블 rebuild.
-    rebuild 시 외래키(mappings.project_id, pattern_mappings.project_id) 도 그대로 유지된다
-    — id 가 보존되기 때문.
+    rebuild 시 외래키(mappings.project_id, pattern_mappings.project_id) 도
+    그대로 유지된다 — id 가 보존되기 때문.
     """
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(projects)")}
     if "work_type" in cols:
@@ -302,7 +302,7 @@ def count_project_mapping_usage(
 
 
 def delete_project(conn: sqlite3.Connection, project_id: int) -> bool:
-    """프로젝트 삭제. 매핑에 사용 중이면 호출 전에 막아야 한다 (이 함수는 검증 안 함)."""
+    """프로젝트 삭제. 매핑 사용 중인지는 caller 가 검증 (이 함수는 검증 안 함)."""
     cur = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     conn.commit()
     return cur.rowcount > 0
@@ -531,7 +531,10 @@ def cleanup_obsolete_default_settings(
         if row["value"] in obsolete_values:
             conn.execute("DELETE FROM settings WHERE key = ?", (key,))
             deleted += 1
-            logger.info("Removed obsolete-default setting %r (will fall back to new default)", key)
+            logger.info(
+                "Removed obsolete-default setting %r (falls back to new default)",
+                key,
+            )
     if deleted:
         conn.commit()
     return deleted

@@ -8,10 +8,8 @@ FastAPI 인스턴스에 타임시트/보고서 관련 라우트를 추가한다.
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
 from datetime import date, timedelta
-from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel, Field
@@ -20,7 +18,7 @@ from . import db as db_module
 from . import formatter as fmt_module
 from .client import TimesheetClient
 from .misc_auto import generate_misc_auto
-from .models import DailyMetaInput, EntryInput, ProjectInput, User, WeekNoteInput
+from .models import DailyMetaInput, EntryInput, ProjectInput, WeekNoteInput
 from .templates import DEFAULT_TEAM_REPORT, DEFAULT_UPNOTE_BODY, DEFAULT_UPNOTE_TITLE
 
 
@@ -220,6 +218,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> dict:
         """그 날 기준 자동 '기타' 문구 생성."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         try:
@@ -360,6 +359,7 @@ def register_routes(app: FastAPI) -> None:
         payload: PatternMappingInput, conn=Depends(get_conn)
     ) -> dict:
         import sqlite3 as _sqlite3
+
         from fastapi import HTTPException
         try:
             pmid = db_module.create_pattern_mapping(
@@ -390,6 +390,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> dict:
         """연간 휴가 사용/잔여 일수 요약."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         y = year or _dt.date.today().year
@@ -405,6 +406,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> list[dict]:
         """연간 휴가계 목록 (조회 전용)."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         y = year or _dt.date.today().year
@@ -429,6 +431,7 @@ def register_routes(app: FastAPI) -> None:
         year_month: 'YYYY-MM' (없으면 오늘 기준 현재 달).
         """
         import datetime as _dt
+
         from fastapi import HTTPException
 
         ym = year_month or _dt.date.today().strftime("%Y-%m")
@@ -683,7 +686,7 @@ def register_routes(app: FastAPI) -> None:
                 entry["sync_status"] = "mismatch"
             items.append(entry)
 
-        # ─── orphan 검출: 회사 grid 에 있는데 도구 entries 에 없는 (date, task[+wt]) ───
+        # orphan 검출 — 회사 grid 에만 있고 도구 entries 에 없는 (date, task[+wt])
         import datetime as _dt
         year_str, w_str = week_iso.split("-W")
         try:
@@ -700,7 +703,7 @@ def register_routes(app: FastAPI) -> None:
         }
         # legacy fallback: project.work_type='' (work_type 미지정) 매핑은
         # _remote_hours 가 name-only 로 합산하므로, orphan 검사도 동일하게
-        # 그 (date, name) 은 어떤 wt 와도 일치한 것으로 간주해야 false positive 가 안 남.
+        # 그 (date, name) 은 어떤 wt 와도 일치한 것으로 간주해 false positive 회피.
         local_name_only = {
             (e["date"], e["task_name"])
             for e in to_check
@@ -742,8 +745,9 @@ def register_routes(app: FastAPI) -> None:
         return {"items": items, "week_iso": week_iso}
 
     # ─── Timesheet Excel 다운로드 (read-only proxy) ────
-    from fastapi.responses import Response as _FastAPIResponse
     from urllib.parse import quote as _quote
+
+    from fastapi.responses import Response as _FastAPIResponse
 
     @app.get("/api/timesheet/excel")
     async def download_excel_route(
@@ -919,6 +923,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> list[dict]:
         """그 달의 휴가 정보를 회사 시스템에서 가져온다 (read-only)."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         ym = year_month or _dt.date.today().strftime("%Y-%m")
@@ -935,6 +940,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> list[dict]:
         """그 달의 공휴일 정보를 회사 시스템에서 가져온다 (read-only)."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         ym = year_month or _dt.date.today().strftime("%Y-%m")
@@ -1257,11 +1263,13 @@ def register_routes(app: FastAPI) -> None:
     SETTING_DEFAULTS: dict[str, str] = {
         "upnote.notebook_id": "",
         "upnote.markdown": "false",  # UpNote 본문을 markdown 으로 렌더할지
-        "upnote.wrap_in_code_block": "false",  # 본문을 ``` 코드블록으로 감싸 markdown 변환 차단
+        # 본문을 ``` 코드블록으로 감싸 markdown 자동 변환 차단
+        "upnote.wrap_in_code_block": "false",
         "upnote.title_template": DEFAULT_UPNOTE_TITLE,
         "upnote.body_template": DEFAULT_UPNOTE_BODY,
         "team_report.template": DEFAULT_TEAM_REPORT,
-        "misc.holiday_exclude_labels": "",  # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
+        # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
+        "misc.holiday_exclude_labels": "",
         "join.auto_task_name": "개발",  # 프로젝트 가입 시 자동으로 가입할 task name
         # 일일업무보고 페이지 상단의 "진행중인 일정" 영역 (월간/주간 계획 보관용)
         "ongoing_schedule": "",
@@ -1347,7 +1355,9 @@ def register_routes(app: FastAPI) -> None:
                 if payload.date:
                     ctx = fmt_module.build_team_report_context(conn, date=payload.date)
                 elif payload.week_iso:
-                    ctx = fmt_module.build_team_report_context(conn, week_iso=payload.week_iso)
+                    ctx = fmt_module.build_team_report_context(
+                        conn, week_iso=payload.week_iso,
+                    )
                 else:
                     raise HTTPException(400, "date or week_iso required")
                 text = fmt_module.render_team_report(payload.template, ctx)

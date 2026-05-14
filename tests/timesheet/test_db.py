@@ -48,7 +48,8 @@ def test_upsert_entries_replaces_day(conn: sqlite3.Connection) -> None:
         ],
     )
     rows = conn.execute(
-        "SELECT category, order_index FROM entries WHERE date='2026-05-12' ORDER BY order_index"
+        "SELECT category, order_index FROM entries "
+        "WHERE date='2026-05-12' ORDER BY order_index"
     ).fetchall()
     assert [r["category"] for r in rows] == ["A", "B"]
 

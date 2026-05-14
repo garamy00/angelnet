@@ -11,12 +11,12 @@ import httpx
 import pytest
 import respx
 
+from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 from angeldash.timesheet.client import (
     SPRING_BASE,
     TS_LOGIN,
     TimesheetClient,
 )
-from angeldash._common.errors import ApiError, AuthError, BotBlockedError
 
 JOBTIME_SEARCH_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/search.json"
 JOBTIME_SAVE_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/save.json"
@@ -334,7 +334,7 @@ async def test_list_vacations_parses_grid(client: TimesheetClient) -> None:
 
 @respx.mock
 async def test_fetch_jobtime_grid_parses_matrix(client: TimesheetClient) -> None:
-    """실제 jobtime grid 응답: data = [task_name, work_type, 1일, 2일, ..., 말일, 월합계].
+    """실제 jobtime grid: data = [task_name, work_type, 1일, ..., 말일, 월합계].
 
     work_type 컬럼 (data[1]) 을 day 1 로 잘못 읽으면 모든 day 가 1씩 shift 되어
     잘못된 비교 결과를 만든다. 회귀 방지 테스트.
@@ -530,8 +530,8 @@ async def test_join_project_sends_C002001(
     await client.close()
     body = route.calls[0].request.content.decode()
     assert body.startswith("rows=")
-    from urllib.parse import unquote_plus
     import json as _json
+    from urllib.parse import unquote_plus
 
     payload = _json.loads(unquote_plus(body[len("rows=") :]))
     assert payload == [
@@ -588,8 +588,8 @@ async def test_set_project_task_joined_sends_correct_row(
     )
     await client.set_project_task_joined(project_id="2160", task_id="11131")
     await client.close()
-    from urllib.parse import unquote_plus
     import json as _json
+    from urllib.parse import unquote_plus
 
     body = route.calls[0].request.content.decode()
     payload = _json.loads(unquote_plus(body[len("rows=") :]))
@@ -671,8 +671,8 @@ async def test_unjoin_project_cascade_no_joined_task(
     await client.close()
     assert save_route.called is True
     assert del_route.called is True
-    from urllib.parse import unquote_plus
     import json as _json
+    from urllib.parse import unquote_plus
 
     body = save_route.calls[0].request.content.decode()
     payload = _json.loads(unquote_plus(body[len("rows=") :]))

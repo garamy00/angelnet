@@ -44,7 +44,8 @@ def test_vacation_page_has_external_new_vacation_button(api):
 def test_vacation_annual_route(api, mock_client):
     """/api/vacation/annual 이 client.get_annual_vacation_summary 결과 전달."""
     mock_client.get_annual_vacation_summary = AsyncMock(return_value={
-        "total": 23.0, "used": 9.0, "remaining": 14.0, "raw_text": "23.0 - 9.0 = 14.0 일",
+        "total": 23.0, "used": 9.0, "remaining": 14.0,
+        "raw_text": "23.0 - 9.0 = 14.0 일",
     })
     r = api.get("/api/vacation/annual?year=2026")
     assert r.status_code == 200
@@ -190,7 +191,7 @@ def test_delete_project_blocked_by_pattern_mapping(api):
 
 
 def test_delete_mapping_removes_row(api):
-    """매핑 행 삭제 후 다시 list 했을 때 그 카테고리가 없거나 placeholder 로만 나타남."""
+    """매핑 행 삭제 후 list 했을 때 그 카테고리가 없거나 placeholder 로만 나타남."""
     p = api.post("/api/projects", json={"name": "Q"}).json()
     api.put("/api/mappings/cat-x", json={"project_id": p["id"], "excluded": False})
     r = api.delete("/api/mappings/cat-x")
@@ -739,7 +740,7 @@ def test_create_project_rejects_same_name_same_work_type(api):
 
 
 def test_remote_tasks_backfills_legacy_empty_work_type(api, mock_client):
-    """work_type 이 비어 있는 레거시 행은 처음 매칭되는 remote task 의 work_type 으로 backfill."""
+    """work_type 비어있는 레거시 행은 첫 매칭 remote task 의 work_type 으로 backfill."""
     mock_client.list_jobtime_tasks = AsyncMock(return_value=[
         {"task_id": "11113", "name": "행정", "work_type": "개발"},
         {"task_id": "11114", "name": "행정", "work_type": "세미나"},
