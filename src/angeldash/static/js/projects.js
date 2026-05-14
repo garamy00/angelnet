@@ -98,11 +98,13 @@ async function loadMappings(projects) {
     tr.innerHTML = `
       <td>${escapeHtml(m.category)}</td>
       <td><select class="project-select">${opts}</select></td>
+      <td><input type="text" class="weekly-name" value="${escapeHtml(m.weekly_project_name || '')}" placeholder="(없으면 타임시트 프로젝트명)" style="width:100%"></td>
       <td><input type="checkbox" class="excluded" ${m.excluded ? 'checked' : ''}></td>
       <td><button class="row-delete" title="이 매핑 행 삭제">×</button></td>
     `;
     const sel = tr.querySelector('.project-select');
     if (m.project_id) sel.value = String(m.project_id);
+    const weeklyInput = tr.querySelector('.weekly-name');
     const exc = tr.querySelector('.excluded');
     const save = async () => {
       try {
@@ -111,6 +113,7 @@ async function loadMappings(projects) {
           {
             project_id: sel.value ? parseInt(sel.value, 10) : null,
             excluded: exc.checked,
+            weekly_project_name: weeklyInput.value.trim() || null,
           },
         );
         toast('매핑 저장됨');
@@ -119,6 +122,7 @@ async function loadMappings(projects) {
       }
     };
     sel.addEventListener('change', save);
+    weeklyInput.addEventListener('blur', save);
     exc.addEventListener('change', save);
     tr.querySelector('.row-delete').addEventListener('click', async () => {
       if (!confirm(`카테고리 '${m.category}' 의 매핑 행을 삭제하시겠습니까?\n(보고서의 카테고리 자체는 유지됨)`)) return;
