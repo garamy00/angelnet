@@ -439,18 +439,6 @@ document.getElementById('btn-preview-email').addEventListener('click', () => {
   });
 });
 
-document.getElementById('btn-preview-upnote').addEventListener('click', () => {
-  if (currentRows.length === 0) { toast('미리보기 할 보고서가 없습니다'); return; }
-  const html = buildHtmlTable(currentRows);
-  const md = buildMarkdownTable(currentRows);
-  openPreviewModal({
-    title: '📝 UpNote 미리보기 (표만 저장)',
-    htmlForPreview: html,
-    htmlForCopy: html,
-    plainForCopy: md,
-  });
-});
-
 // ─── 이메일 보내기 (서버 SMTP) ──────────────────
 
 document.getElementById('btn-send-email').addEventListener('click', async () => {
