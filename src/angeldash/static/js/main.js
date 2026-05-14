@@ -468,6 +468,7 @@ function applyVerifyResult(items) {
         await apiPost('/api/actions/timesheet-push-one', {
           date: it.date,
           task_name: it.task_name,
+          task_work_type: it.task_work_type || '',
           hours: 0,
         });
         toast('회사 시스템에서 삭제됨');

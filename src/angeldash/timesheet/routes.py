@@ -623,27 +623,51 @@ def register_routes(app: FastAPI) -> None:
             })
             needed_months.add(e["date"][:7])
 
-        # 월별 search.json grid 호출
-        grids: dict[str, dict[str, dict[int, float]]] = {}
+        # 월별 detailed grid 호출 — (task_name, work_type) 분리 보존.
+        # 회사 시스템에 같은 name 두 task (work_type 만 다름) 가 등록된 경우
+        # name-only grid 는 둘을 합쳐 잘못된 비교를 만든다.
+        # grids[ym][(name, work_type)] = {day: hours}
+        grids: dict[str, dict[tuple[str, str], dict[int, float]]] = {}
         for ym in sorted(needed_months):
             try:
-                grids[ym] = await client.fetch_jobtime_grid(year_month=ym)
+                rows_detailed = await client.fetch_jobtime_grid_detailed(
+                    year_month=ym,
+                )
             except Exception as exc:
                 raise HTTPException(500, f"verify({ym}): {exc}") from exc
+            per_month: dict[tuple[str, str], dict[int, float]] = {}
+            for row in rows_detailed:
+                key = (
+                    row.get("task_name", ""),
+                    (row.get("work_type") or "").strip(),
+                )
+                per_month[key] = row.get("days", {})
+            grids[ym] = per_month
 
-        # 한 날에 여러 entries 가 같은 task 로 매핑될 수 있으므로
-        # (date, task_name) 단위로 도구 hours 를 합산하여 회사 시스템과 비교한다.
-        local_totals: dict[tuple[str, str], float] = {}
+        def _remote_hours(ym: str, name: str, wt: str, day: int) -> float:
+            """(name, wt) 정확 매칭 → 없으면 name 만으로 합산 (legacy fallback)."""
+            month = grids.get(ym, {})
+            exact = month.get((name, wt))
+            if exact is not None:
+                return exact.get(day, 0.0)
+            total = 0.0
+            for (n, _wt), days in month.items():
+                if n == name:
+                    total += days.get(day, 0.0)
+            return total
+
+        # (date, task_name, task_work_type) 로 도구 hours 합산
+        local_totals: dict[tuple[str, str, str], float] = {}
         for e in to_check:
-            key = (e["date"], e["task_name"])
+            key = (e["date"], e["task_name"], e.get("task_work_type") or "")
             local_totals[key] = local_totals.get(key, 0.0) + e["hours"]
 
         for e in to_check:
             ym = e["date"][:7]
             day = int(e["date"].split("-")[2])
-            grid = grids.get(ym, {})
-            remote = grid.get(e["task_name"], {}).get(day, 0.0)
-            local_total = local_totals[(e["date"], e["task_name"])]
+            wt = e.get("task_work_type") or ""
+            remote = _remote_hours(ym, e["task_name"], wt, day)
+            local_total = local_totals[(e["date"], e["task_name"], wt)]
             entry = {
                 **e,
                 "remote_hours": remote,
@@ -659,7 +683,7 @@ def register_routes(app: FastAPI) -> None:
                 entry["sync_status"] = "mismatch"
             items.append(entry)
 
-        # ─── orphan 검출: 회사 grid 에 있는데 도구 entries 에 없는 (date, task) ───
+        # ─── orphan 검출: 회사 grid 에 있는데 도구 entries 에 없는 (date, task[+wt]) ───
         import datetime as _dt
         year_str, w_str = week_iso.split("-W")
         try:
@@ -670,14 +694,18 @@ def register_routes(app: FastAPI) -> None:
         except ValueError:
             week_dates_set = set()
 
-        local_keys = {(e["date"], e["task_name"]) for e in to_check}
-        for ym, grid in grids.items():
+        local_keys = {
+            (e["date"], e["task_name"], e.get("task_work_type") or "")
+            for e in to_check
+        }
+        for ym, month in grids.items():
             try:
                 y_int = int(ym.split("-")[0])
                 m_int = int(ym.split("-")[1])
             except (ValueError, IndexError):
                 continue
-            for task_name, day_hours in grid.items():
+            for (task_name, wt), day_hours in month.items():
+                display = f"{task_name} [{wt}]" if wt else task_name
                 for day, h in day_hours.items():
                     if h <= 0:
                         continue
@@ -687,12 +715,13 @@ def register_routes(app: FastAPI) -> None:
                         continue
                     if date_iso not in week_dates_set:
                         continue
-                    if (date_iso, task_name) in local_keys:
+                    if (date_iso, task_name, wt) in local_keys:
                         continue
                     items.append({
                         "date": date_iso,
-                        "category": task_name,
+                        "category": display,
                         "task_name": task_name,
+                        "task_work_type": wt,
                         "hours": 0.0,
                         "body_md": "",
                         "remote_hours": h,

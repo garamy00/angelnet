@@ -877,9 +877,10 @@ def test_verify_marks_synced_and_mismatch(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: 5/12 EM 고도화 = 4h, 5/13 = 0h
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화 task": {12: 4.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "EM 고도화 task", "label": "EM 고도화 task",
+         "work_type": "", "days": {12: 4.0}},
+    ])
 
     pid = api.post("/api/projects", json={
         "name": "EM 고도화", "remote_id": "EM 고도화 task",
@@ -906,7 +907,7 @@ def test_verify_marks_synced_and_mismatch(api, mock_client):
 
 def test_verify_marks_no_mapping(api, mock_client):
     from unittest.mock import AsyncMock
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
     api.put("/api/days/2026-05-12", json={
         "week_iso": "2026-W20",
         "entries": [{"category": "Unmapped", "hours": 4, "body_md": ""}],
@@ -959,9 +960,10 @@ def test_verify_aggregates_same_task_on_same_day(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: EM 고도화 task 의 5/7 = 8h
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화 task": {7: 8.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "EM 고도화 task", "label": "EM 고도화 task",
+         "work_type": "", "days": {7: 8.0}},
+    ])
 
     # 두 카테고리 모두 같은 task 로 매핑
     pid = api.post("/api/projects", json={
@@ -1011,9 +1013,10 @@ def test_verify_uses_pattern_mapping_when_body_matches(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: 패턴_프로젝트_task 의 5/7 = 4h
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "패턴_프로젝트_task": {7: 4.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "패턴_프로젝트_task", "label": "패턴_프로젝트_task",
+         "work_type": "", "days": {7: 4.0}},
+    ])
 
     # 카테고리 매핑은 다른 task. 패턴 매핑이 우선이어야 함.
     cat_pid = api.post("/api/projects", json={
@@ -1054,11 +1057,17 @@ def test_verify_reports_orphan_entries(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: 5/12 에 두 task 시간이 있음
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화 task": {12: 4.0},     # 도구에도 있음
-        "다른 잡일 task": {12: 2.0},      # 도구에 없음 (orphan)
-        "또 다른 task": {15: 1.0},        # 그 주 아니면 무시 (W20=5/11~5/17 이므로 포함)
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        # 도구에도 있음
+        {"task_name": "EM 고도화 task", "label": "EM 고도화 task",
+         "work_type": "", "days": {12: 4.0}},
+        # 도구에 없음 (orphan)
+        {"task_name": "다른 잡일 task", "label": "다른 잡일 task",
+         "work_type": "", "days": {12: 2.0}},
+        # 그 주 안 (W20=5/11~5/17 포함)
+        {"task_name": "또 다른 task", "label": "또 다른 task",
+         "work_type": "", "days": {15: 1.0}},
+    ])
 
     pid = api.post("/api/projects", json={
         "name": "EM 고도화", "remote_id": "EM 고도화 task",
@@ -1079,6 +1088,86 @@ def test_verify_reports_orphan_entries(api, mock_client):
     # 다른 잡일 task 와 또 다른 task 둘 다 orphan
     assert ("2026-05-12", "다른 잡일 task") in orphan_keys
     assert ("2026-05-15", "또 다른 task") in orphan_keys
+
+
+def test_verify_distinguishes_tasks_by_work_type(api, mock_client):
+    """같은 name 의 두 task (work_type 만 다름) — verify 가 정확히 분리 비교.
+
+    회사 시스템: 행정 [개발] = 2h, 행정 [세미나] = 0
+    로컬: AI 세미나 → 행정 [세미나] 매핑, 2h
+    → 로컬 [세미나] 는 not_submitted, 회사 [개발] 의 2h 는 orphan 으로.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "행정", "label": "행정 [개발]",
+         "work_type": "개발", "days": {15: 2.0}},
+        {"task_name": "행정", "label": "행정 [세미나]",
+         "work_type": "세미나", "days": {}},
+    ])
+
+    # 로컬: AI 세미나 → 행정 [세미나]
+    pid = api.post("/api/projects", json={
+        "name": "행정", "remote_id": "행정",
+        "work_type": "세미나",
+    }).json()["id"]
+    api.put("/api/mappings/AI 세미나",
+            json={"project_id": pid, "excluded": False})
+    api.put("/api/days/2026-05-15", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "AI 세미나", "hours": 2, "body_md": ""}],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = r.json()["items"]
+    by_status: dict[str, list[dict]] = {}
+    for it in items:
+        by_status.setdefault(it["sync_status"], []).append(it)
+
+    # 로컬 [세미나] entry — 아직 회사에 제출 안 됨
+    sub = [it for it in items
+           if it.get("category") == "AI 세미나"
+           and it["sync_status"] == "not_submitted"]
+    assert sub, "[세미나] 항목이 not_submitted 로 표시되어야 함"
+
+    # 회사 [개발] 의 2h — 로컬 매핑이 [세미나] 라 [개발] 은 orphan
+    orphans = by_status.get("orphan", [])
+    assert any(
+        it["task_name"] == "행정"
+        and it.get("task_work_type") == "개발"
+        and it["remote_hours"] == 2.0
+        for it in orphans
+    ), "회사 [개발] 의 2h 가 orphan 으로 표시되어야 함"
+
+
+def test_verify_legacy_project_without_work_type_falls_back_to_name(
+    api, mock_client,
+):
+    """project.work_type 비어있는 기존 데이터 — name 만 매칭하는 fallback 동작."""
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "단순 task", "label": "단순 task [개발]",
+         "work_type": "개발", "days": {12: 4.0}},
+    ])
+
+    # 기존 데이터 — work_type 미지정
+    pid = api.post("/api/projects", json={
+        "name": "단순", "remote_id": "단순 task",
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = [
+        it for it in r.json()["items"]
+        if it.get("category") == "X"
+    ]
+    assert items and items[0]["sync_status"] == "synced"  # fallback 매칭
 
 
 def test_push_one_submits_single_row(api, mock_client):
