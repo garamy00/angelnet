@@ -463,19 +463,38 @@ _COL_HEADERS = (
 )
 
 
+def _esc_basic(s: str) -> str:
+    """HTML 특수문자 escape — 줄바꿈/들여쓰기는 보존하지 않음."""
+    return (
+        (s or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _esc_preserve_whitespace(s: str) -> str:
+    """셀 내부 escape + 줄바꿈을 <br>, 줄 시작 spaces 를 &nbsp; 로.
+
+    Outlook 일부 버전이 white-space:pre-wrap 을 무시하므로 명시적으로 변환.
+    줄 중간의 연속 space 는 그대로 둔다 (브라우저가 1개로 합쳐도 가독성 영향 적음).
+    """
+    if not s:
+        return ""
+    out_lines: list[str] = []
+    for line in s.split("\n"):
+        stripped = line.lstrip(" ")
+        indent = len(line) - len(stripped)
+        out_lines.append("&nbsp;" * indent + _esc_basic(stripped))
+    return "<br>".join(out_lines)
+
+
 def render_html_table(rows: list[dict]) -> str:
     """Outlook 친화 HTML 표 (인라인 스타일).
 
-    셀 내부의 줄바꿈/들여쓰기는 white-space:pre-wrap + monospace 폰트로 보존.
+    셀 내부의 줄바꿈은 <br>, 줄 시작 들여쓰기는 &nbsp; 로 명시적 변환 —
+    white-space:pre-wrap 만으로는 Outlook 일부 버전에서 무시되어 한 줄이 됨.
     """
-    def _esc(s: str) -> str:
-        return (
-            (s or "")
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-
     th_style = "border:1px solid #888; padding:6px;"
     td_proj_style = "border:1px solid #888; padding:6px; vertical-align:top;"
     td_body_style = (
@@ -492,28 +511,19 @@ def render_html_table(rows: list[dict]) -> str:
     )
     lines.append('<thead><tr style="background:#e8e8e8;">')
     for h in _COL_HEADERS:
-        lines.append(f'<th style="{th_style}">{_esc(h)}</th>')
+        lines.append(f'<th style="{th_style}">{_esc_basic(h)}</th>')
     lines.append("</tr></thead>")
     lines.append("<tbody>")
     for r in rows:
         lines.append("<tr>")
-        lines.append(
-            f'<td style="{td_proj_style}"><b>{_esc(r.get("project_name", ""))}</b></td>'
-        )
+        proj = _esc_basic(r.get("project_name", ""))
+        lines.append(f'<td style="{td_proj_style}"><b>{proj}</b></td>')
         for key in ("last_week", "this_week", "next_week", "note"):
-            lines.append(f'<td style="{td_body_style}">{_esc(r.get(key, ""))}</td>')
+            body = _esc_preserve_whitespace(r.get(key, ""))
+            lines.append(f'<td style="{td_body_style}">{body}</td>')
         lines.append("</tr>")
     lines.append("</tbody></table>")
     return "".join(lines)
-
-
-def _html_escape(s: str) -> str:
-    return (
-        (s or "")
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
 
 
 def _plain_to_html_paragraphs(text: str) -> str:
@@ -525,11 +535,7 @@ def _plain_to_html_paragraphs(text: str) -> str:
     for p in paragraphs:
         if not p.strip():
             continue
-        out.append(
-            "<p>"
-            + _html_escape(p).replace("\n", "<br>")
-            + "</p>"
-        )
+        out.append("<p>" + _esc_basic(p).replace("\n", "<br>") + "</p>")
     return "".join(out)
 
 

@@ -260,9 +260,21 @@ document.getElementById('next-week').addEventListener('click', () => {
 
 // ─── 본문 빌더 (HTML / 마크다운 / 이메일 전체) ────
 
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+const esc = (s) => (s || '').replace(/[&<>]/g, (c) => ESC_MAP[c]);
+
+// 셀 안의 줄바꿈/들여쓰기 보존 — Outlook 일부 버전이 white-space:pre-wrap 을
+// 무시하므로 \n → <br>, 줄 시작 spaces → &nbsp; 로 명시적 변환.
+function escPreserveWhitespace(s) {
+  if (!s) return '';
+  return s.split('\n').map((line) => {
+    const stripped = line.replace(/^ +/, '');
+    const indent = line.length - stripped.length;
+    return '&nbsp;'.repeat(indent) + esc(stripped);
+  }).join('<br>');
+}
+
 function buildHtmlTable(rows) {
-  const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
-  const esc = (s) => (s || '').replace(/[&<>]/g, (c) => escMap[c]);
   const thStyle = 'border:1px solid #888; padding:6px;';
   const tdProj = 'border:1px solid #888; padding:6px; vertical-align:top;';
   const tdBody = (
@@ -276,7 +288,7 @@ function buildHtmlTable(rows) {
       `<td style="${tdProj}"><b>${esc(r.project_name)}</b></td>`,
     ];
     for (const key of COL_KEYS) {
-      cells.push(`<td style="${tdBody}">${esc(r[key])}</td>`);
+      cells.push(`<td style="${tdBody}">${escPreserveWhitespace(r[key])}</td>`);
     }
     return `<tr>${cells.join('')}</tr>`;
   }).join('');
@@ -307,8 +319,6 @@ function buildMarkdownTable(rows) {
 
 function plainToHtmlParagraphs(text) {
   if (!text) return '';
-  const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
-  const esc = (s) => s.replace(/[&<>]/g, (c) => escMap[c]);
   return text.split('\n\n')
     .filter((p) => p.trim())
     .map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>')

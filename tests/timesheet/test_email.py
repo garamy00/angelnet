@@ -89,6 +89,37 @@ def test_render_email_plain_concatenates_with_blank_lines() -> None:
     assert "| P1 |" in out
 
 
+def test_render_html_table_preserves_newlines_and_indent() -> None:
+    """Outlook 호환 — \\n 은 <br>, 줄 시작 spaces 는 &nbsp; 로 명시적 변환."""
+    rows = [{
+        "project_name": "P1",
+        "last_week": "",
+        "this_week": "*) EM 고도화\n  - 신규 OAM 서버\n    . 코어 인프라 구현",
+        "next_week": "",
+        "note": "",
+    }]
+    html = weekly_table.render_html_table(rows)
+    # 줄바꿈이 <br> 로
+    assert "*) EM 고도화<br>" in html
+    # 2-space 들여쓰기가 &nbsp;&nbsp; 로
+    assert "&nbsp;&nbsp;- 신규 OAM" in html
+    # 4-space 들여쓰기가 &nbsp;×4 로
+    assert "&nbsp;&nbsp;&nbsp;&nbsp;. 코어 인프라 구현" in html
+
+
+def test_render_html_table_escapes_html_chars_in_cells() -> None:
+    """셀에 < > & 가 있어도 안전하게 escape."""
+    rows = [{
+        "project_name": "P&Q",
+        "last_week": "<script>alert(1)</script>",
+        "this_week": "", "next_week": "", "note": "",
+    }]
+    html = weekly_table.render_html_table(rows)
+    assert "P&amp;Q" in html
+    assert "&lt;script&gt;" in html
+    assert "<script>" not in html
+
+
 def test_render_email_plain_omits_empty_greeting_and_closing() -> None:
     rows = [{"project_name": "P1", "last_week": "", "this_week": "",
              "next_week": "", "note": ""}]
