@@ -292,6 +292,16 @@ def test_put_settings_rejects_invalid_jinja2(api):
     assert r.status_code == 400
 
 
+def test_put_settings_validates_weekly_title_template_syntax(api):
+    """주간 제목 템플릿도 다른 template 키와 동일하게 syntax 검증."""
+    r = api.put(
+        "/api/settings",
+        json={"upnote.weekly_title_template": "{% unclosed"},
+    )
+    assert r.status_code == 400
+    assert "template" in r.json().get("detail", "").lower()
+
+
 def test_post_settings_preview_renders_team_report(api):
     api.put(
         "/api/days/2026-05-12",
@@ -1686,6 +1696,29 @@ def test_monthly_grid_adds_vacation_rows_with_full_and_half(api, mock_client):
     assert body["daily_totals"]["4"] == 8.0
     assert body["daily_totals"]["13"] == 4.0
     assert body["month_total"] == 20.0
+
+
+def test_monthly_grid_daily_totals_sum_task_and_vacation(api, mock_client):
+    """같은 날에 task 시간 + 휴가 시간 둘 다 있을 때 daily_totals 가 정확히 합산.
+
+    예: 오전 반차 (4h) + 오후 task 입력 (4h) = 그 날 합계 8h.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "OAM", "label": "OAM [개발]",
+         "work_type": "개발", "days": {15: 4.0}},  # 5/15 오후 입력
+    ])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[
+        {"date": "2026-05-15", "type": "반차(오전)", "hours": 4.0},
+    ])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    body = r.json()
+    # 일별 합계: 5/15 에 task 4h + 휴가 4h = 8h
+    assert body["daily_totals"]["15"] == 8.0
+    # 월 합계도 합산
+    assert body["month_total"] == 8.0
 
 
 def test_monthly_grid_holidays_exclude_labels(api, mock_client):

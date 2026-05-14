@@ -175,6 +175,52 @@ async def test_fetch_jobtime_grid_detailed_auto_detects_text_columns(
 
 
 @respx.mock
+async def test_fetch_jobtime_grid_detailed_handles_all_zero_row(
+    client: TimesheetClient,
+) -> None:
+    """일별 시간이 모두 0 인 row 도 정상 반환 (0-filter 는 호출자 책임)."""
+    respx.post(JOBTIME_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {"id": "11113", "data": ["빈 task", "개발",
+                                              "0", "0", "0", "0"]},
+                ],
+            },
+        )
+    )
+    rows = await client.fetch_jobtime_grid_detailed(year_month="2026-05")
+    await client.close()
+    assert len(rows) == 1
+    assert rows[0]["days"] == {}  # 모든 hours 가 0 이라 day_hours 비어있음
+    assert rows[0]["label"] == "빈 task [개발]"
+
+
+@respx.mock
+async def test_fetch_jobtime_grid_detailed_skips_empty_first_text(
+    client: TimesheetClient,
+) -> None:
+    """data[0] 이 빈 문자열인 row (합계/소계 등) 는 결과에서 제외."""
+    respx.post(JOBTIME_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {"id": "11113", "data": ["정상 task", "개발",
+                                              "4", "0", "4"]},
+                    {"id": "11114", "data": ["", "월합계", "4", "0", "4"]},
+                ],
+            },
+        )
+    )
+    rows = await client.fetch_jobtime_grid_detailed(year_month="2026-05")
+    await client.close()
+    names = [r["task_name"] for r in rows]
+    assert names == ["정상 task"]  # 빈 텍스트 prefix row 는 skip
+
+
+@respx.mock
 async def test_submit_jobtimes_sends_form_encoded_rows(
     client: TimesheetClient,
 ) -> None:
