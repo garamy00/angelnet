@@ -21,6 +21,7 @@ const cachedSettings = {
   emailSubjectTemplate: '',
   emailGreeting: '',
   emailClosing: '',
+  emailSignatureHtml: '',
 };
 
 async function loadCachedSettings() {
@@ -32,6 +33,7 @@ async function loadCachedSettings() {
     cachedSettings.emailSubjectTemplate = s['email.subject_template'] || '';
     cachedSettings.emailGreeting = s['email.greeting'] || '';
     cachedSettings.emailClosing = s['email.closing'] || '';
+    cachedSettings.emailSignatureHtml = s['email.signature_html'] || '';
   } catch (e) {
     // 설정 로드 실패 — 캐시는 빈 채로 유지. 액션 시 toast 로 안내.
   }
@@ -413,18 +415,12 @@ document.addEventListener('keydown', (e) => {
 
 document.getElementById('btn-preview-email').addEventListener('click', () => {
   if (currentRows.length === 0) { toast('미리보기 할 보고서가 없습니다'); return; }
+  // 미리보기와 복사용 둘 다 서명 포함 — 실제 발송 본문과 일치하도록.
   const html = buildEmailHtml(
     currentRows,
     cachedSettings.emailGreeting,
     cachedSettings.emailClosing,
-    '',  // 미리보기 영역은 서명 raw HTML 을 그대로 보여주지 않음 (이미지 등 깨질 수 있어)
-  );
-  // 복사용에는 서명 포함
-  const htmlForCopy = buildEmailHtml(
-    currentRows,
-    cachedSettings.emailGreeting,
-    cachedSettings.emailClosing,
-    '',
+    cachedSettings.emailSignatureHtml,
   );
   const plainForCopy = buildEmailPlain(
     currentRows,
@@ -434,7 +430,7 @@ document.getElementById('btn-preview-email').addEventListener('click', () => {
   openPreviewModal({
     title: '📧 이메일 미리보기',
     htmlForPreview: html,
-    htmlForCopy,
+    htmlForCopy: html,
     plainForCopy,
   });
 });

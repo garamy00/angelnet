@@ -698,6 +698,14 @@ def register_routes(app: FastAPI) -> None:
             (e["date"], e["task_name"], e.get("task_work_type") or "")
             for e in to_check
         }
+        # legacy fallback: project.work_type='' (work_type 미지정) 매핑은
+        # _remote_hours 가 name-only 로 합산하므로, orphan 검사도 동일하게
+        # 그 (date, name) 은 어떤 wt 와도 일치한 것으로 간주해야 false positive 가 안 남.
+        local_name_only = {
+            (e["date"], e["task_name"])
+            for e in to_check
+            if not (e.get("task_work_type") or "")
+        }
         for ym, month in grids.items():
             try:
                 y_int = int(ym.split("-")[0])
@@ -717,6 +725,8 @@ def register_routes(app: FastAPI) -> None:
                         continue
                     if (date_iso, task_name, wt) in local_keys:
                         continue
+                    if (date_iso, task_name) in local_name_only:
+                        continue  # legacy 매핑이 이미 cover
                     items.append({
                         "date": date_iso,
                         "category": display,
@@ -1585,13 +1595,20 @@ def register_routes(app: FastAPI) -> None:
                 raise HTTPException(500, f"task 목록 조회 실패: {exc}") from exc
             paired: dict[tuple[str, str], str] = {}
             fallback: dict[str, str] = {}
+            fallback_wt: dict[str, str] = {}  # bookkeeping
             for t in tasks:
                 name = t["name"]
                 wt = (t.get("work_type") or "").strip()
                 paired[(name, wt)] = t["task_id"]
-                # name 만으로 매칭하는 fallback — 마지막에 본 것이 winning
-                # (project.work_type 비어 있는 기존 등록 데이터 호환)
-                fallback[name] = t["task_id"]
+                # name 만으로 매칭하는 fallback — work_type 비어있는 task 를
+                # 우선 채택 (legacy 매핑 의미와 가장 일치). 그것도 없으면
+                # 회사 응답에서 first-seen 유지. 결정적 동작.
+                if name not in fallback:
+                    fallback[name] = t["task_id"]
+                    fallback_wt[name] = wt
+                elif not wt and fallback_wt.get(name):
+                    fallback[name] = t["task_id"]
+                    fallback_wt[name] = wt
             task_id_by_month[ym] = paired
             task_id_fallback_by_month[ym] = fallback
 

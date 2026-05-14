@@ -75,7 +75,15 @@ def _build_message(spec: EmailMessageSpec) -> EmailMessage:
 
 
 def _connect(cfg: SmtpConfig) -> smtplib.SMTP:
-    """SMTP 연결 + (필요 시) STARTTLS. 인증은 별도 step."""
+    """SMTP 연결 + (필요 시) STARTTLS. 인증은 별도 step.
+
+    port 465 는 SMTPS 전용이므로 use_tls(STARTTLS) 옵션과 충돌. 명확한 에러로 막는다.
+    """
+    if cfg.port == 465 and cfg.use_tls:
+        raise SmtpError(
+            "포트 465 는 SMTPS 전용이라 STARTTLS 와 함께 쓸 수 없습니다. "
+            "포트 587 (STARTTLS=on) 또는 465 (STARTTLS=off) 중 선택하세요.",
+        )
     if cfg.use_tls:
         # STARTTLS — port 587 (또는 25) 의 일반적 패턴
         server = smtplib.SMTP(cfg.host, cfg.port, timeout=SMTP_TIMEOUT_SECONDS)

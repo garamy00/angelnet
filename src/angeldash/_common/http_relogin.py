@@ -86,11 +86,23 @@ class AutoReloginHttp:
         await self._http.aclose()
 
     async def _call(self, method: str, url: str, **kw: Any) -> httpx.Response:
+        return await self._call_with_depth(method, url, depth=0, **kw)
+
+    async def _call_with_depth(
+        self, method: str, url: str, *, depth: int, **kw: Any
+    ) -> httpx.Response:
         resp = await self._http.request(method, url, **kw)
         # refresh 진행 중이거나 password 미보관(첫 로그인 시도 중) 이면 감지 건너뜀
         if self._refreshing or not self._can_refresh():
             return resp
         if not is_session_expired(resp):
+            return resp
+        # 재시도 한도 — refresh 후에도 다시 만료 응답이면 caller 에게 그 응답 전달.
+        # depth >= 1 일 때 한 번 더 refresh 시도하지 않아 무한 루프 방지.
+        if depth >= 1:
+            logger.warning(
+                "Session still expired after refresh — giving up (url=%s)", url,
+            )
             return resp
         logger.info(
             "Session expired (status=%s url=%s) — re-logging in",
@@ -101,4 +113,4 @@ class AutoReloginHttp:
             await self._refresh()
         finally:
             self._refreshing = False
-        return await self._http.request(method, url, **kw)
+        return await self._call_with_depth(method, url, depth=depth + 1, **kw)

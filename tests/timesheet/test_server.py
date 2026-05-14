@@ -1170,6 +1170,75 @@ def test_verify_legacy_project_without_work_type_falls_back_to_name(
     assert items and items[0]["sync_status"] == "synced"  # fallback 매칭
 
 
+def test_submit_fallback_prefers_empty_work_type(api, mock_client):
+    """fallback 매칭 — 같은 name 의 task 가 여러 개일 때 work_type 빈 것을 우선 채택.
+
+    legacy project (work_type='') 의 의미와 가장 자연스럽게 일치.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    # 회사 시스템: 같은 name 두 task — 응답 순서 [개발], [] (빈 wt)
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "DEV-ID", "name": "동일 task", "work_type": "개발"},
+        {"task_id": "EMPTY-ID", "name": "동일 task", "work_type": ""},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    # legacy project — work_type 미지정
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+    pid = api.post("/api/projects", json={
+        "name": "동일", "remote_id": "동일 task",  # work_type 미지정
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    # 빈 work_type 의 task (EMPTY-ID) 가 우선 채택되어야 함, [개발] (DEV-ID) 아님
+    assert rows[0]["task_id"] == "EMPTY-ID"
+
+
+def test_verify_legacy_local_does_not_trigger_false_orphan(api, mock_client):
+    """project.work_type='' (legacy 매핑) 일 때 회사의 같은 name + wt 명시 task 가
+    orphan 으로 잘못 분류되지 않는다 — _remote_hours 의 name-only fallback 과
+    orphan 검사의 비대칭 회귀 방지."""
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "단순", "label": "단순 [개발]",
+         "work_type": "개발", "days": {12: 4.0}},
+    ])
+
+    # legacy project — work_type 미지정
+    pid = api.post("/api/projects", json={
+        "name": "단순", "remote_id": "단순",
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = r.json()["items"]
+    # 동일 (date, name) 의 orphan 이 없어야 함
+    orphans = [
+        it for it in items
+        if it["sync_status"] == "orphan"
+        and it.get("task_name") == "단순"
+        and it["date"] == "2026-05-12"
+    ]
+    assert not orphans, f"legacy fallback 에서 거짓 orphan 발생: {orphans}"
+
+
 def test_push_one_submits_single_row(api, mock_client):
     """push-one 은 search → 단일 row save 호출."""
     from unittest.mock import AsyncMock
