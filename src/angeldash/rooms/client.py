@@ -28,12 +28,9 @@ SPRING_BASE = "https://timesheet.uangel.com/times/application/meeting_room/api"
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X)"
 HTTP_TIMEOUT = 15.0
 BOT_BLOCK_MARKER = "Automated requests are not allowed"
-# 회의실 페이지는 호출이 드물어 (페이지 진입 시 한 번만) 만료된 cookie 를 그대로
-# 쓸 위험이 크다. 회사 Spring 서버의 실제 idle TTL 보다 짧게 잡아, 페이지를 새로
-# 열 때마다 me 핸들러가 강제로 fresh login 수행하도록 한다.
-# 5분 — AutoReloginHttp 가 못 잡는 만료 응답 케이스(200+JSON 등) 도 cover 하기
-# 위해 보수적으로 짧게 설정.
-SESSION_TTL = 5 * 60  # 5분
+# _user 캐시의 절대 만료 — AutoReloginHttp 의 idle 기반 사전 재로그인이
+# 1차 보호망이라 길어도 OK. 안전을 위해 1시간으로 유지.
+SESSION_TTL = 60 * 60  # 1시간
 
 
 def _is_bot_blocked(payload: Any) -> bool:
