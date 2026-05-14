@@ -113,3 +113,50 @@ def test_render_markdown_table_handles_newlines_and_pipes() -> None:
 
 def test_prev_week_iso_year_boundary() -> None:
     assert weekly_table._prev_week_iso("2026-W01") == "2025-W52"
+
+
+# ─── tree-merge: body 결합 시 공통 prefix 묶기 ─────────
+
+
+def test_merge_bodies_identical_returns_one() -> None:
+    """3개의 완전 동일한 body → 1번만 표시."""
+    body = "  - 신규 OAM 서버 공통 패키지 개발\n    . 코어 인프라 구현"
+    out = weekly_table._merge_bodies([body, body, body])
+    assert out == body
+
+
+def test_merge_bodies_shared_prefix_different_leaf() -> None:
+    """공통 prefix 묶음 + leaf 만 다른 줄 enumerate."""
+    bodies = [
+        "  - 코어 인프라\n    -> 로깅 모듈",
+        "  - 코어 인프라\n    -> DB 레이어",
+        "  - 코어 인프라\n    -> 데몬 뼈대",
+    ]
+    out = weekly_table._merge_bodies(bodies)
+    assert out == (
+        "  - 코어 인프라\n"
+        "    -> 로깅 모듈\n"
+        "    -> DB 레이어\n"
+        "    -> 데몬 뼈대"
+    )
+
+
+def test_merge_bodies_different_top_level_kept_in_order() -> None:
+    """완전 다른 top-level entries 는 첫 등장 순으로 결합 (merge 없음)."""
+    bodies = [
+        "  - 회의 참석",
+        "  - 보고서 작성",
+    ]
+    out = weekly_table._merge_bodies(bodies)
+    assert out == "  - 회의 참석\n  - 보고서 작성"
+
+
+def test_merge_bodies_single_body_unchanged() -> None:
+    """1개 body 는 그대로 (round-trip)."""
+    body = "  - X\n    . Y\n      -> Z"
+    assert weekly_table._merge_bodies([body]) == body
+
+
+def test_merge_bodies_empty_list_returns_empty() -> None:
+    """빈 입력 → 빈 출력."""
+    assert weekly_table._merge_bodies([]) == ""

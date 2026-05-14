@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import sqlite3
+from dataclasses import dataclass, field
 from typing import Any
 
 from . import db
@@ -97,6 +98,92 @@ def _entries_grouped_by_project(
     return by_project
 
 
+# ─── body_md tree-merge 헬퍼 ────────────────────────
+# 같은 (week, project, category) 의 여러 body_md 를 들여쓰기 기반 트리로 파싱한 뒤
+# 공통 prefix 라인은 1번만, 다른 leaf 만 enumerate 하도록 합친다.
+
+
+@dataclass
+class _Node:
+    """들여쓰기 기반 단순 트리 노드."""
+    depth: int                                 # leading-space count
+    line: str                                  # 원본 라인 (들여쓰기 유지)
+    children: list[_Node] = field(default_factory=list)
+
+
+def _parse_body_to_tree(body_md: str) -> list[_Node]:
+    """body_md 의 라인을 들여쓰기 깊이 기반 트리로 파싱.
+
+    빈 라인은 skip. depth 는 앞쪽 space 수.
+    """
+    roots: list[_Node] = []
+    stack: list[_Node] = []
+    for raw in body_md.split("\n"):
+        if not raw.strip():
+            continue
+        depth = len(raw) - len(raw.lstrip(" "))
+        node = _Node(depth=depth, line=raw.rstrip(), children=[])
+        # stack top 의 depth 가 현재 이상이면 pop (sibling/얕은 위치 처리)
+        while stack and stack[-1].depth >= depth:
+            stack.pop()
+        if stack:
+            stack[-1].children.append(node)
+        else:
+            roots.append(node)
+        stack.append(node)
+    return roots
+
+
+def _merge_trees(trees: list[list[_Node]]) -> list[_Node]:
+    """여러 트리의 같은-level 노드들을 content key(line.strip()) 로 머지.
+
+    같은 key 의 자식 노드들은 재귀적으로 머지. 첫 등장 순서 보존.
+    입력 트리들을 mutate 하지 않도록 자식 리스트는 shallow copy 후 머지.
+    """
+    merged: list[_Node] = []
+    by_key: dict[str, _Node] = {}
+    for tree in trees:
+        for src in tree:
+            key = src.line.strip()
+            if key in by_key:
+                existing = by_key[key]
+                existing.children = _merge_trees(
+                    [existing.children, src.children]
+                )
+            else:
+                node = _Node(
+                    depth=src.depth,
+                    line=src.line,
+                    children=list(src.children),
+                )
+                merged.append(node)
+                by_key[key] = node
+    return merged
+
+
+def _render_tree(nodes: list[_Node]) -> str:
+    """트리를 DFS 로 다시 텍스트로. 원본 line 그대로 출력."""
+    out: list[str] = []
+
+    def walk(n: _Node) -> None:
+        out.append(n.line)
+        for c in n.children:
+            walk(c)
+
+    for n in nodes:
+        walk(n)
+    return "\n".join(out)
+
+
+def _merge_bodies(bodies: list[str]) -> str:
+    """같은 카테고리 안의 body_md 들을 tree-merge 로 결합."""
+    if not bodies:
+        return ""
+    trees = [_parse_body_to_tree(b) for b in bodies]
+    merged = _merge_trees(trees)
+    return _render_tree(merged)
+
+
 def _format_cell_text(entries: list[dict[str, Any]]) -> str:
     """카테고리별로 묶어 셀 텍스트 생성.
 
@@ -122,7 +209,7 @@ def _format_cell_text(entries: list[dict[str, Any]]) -> str:
     for cat in order:
         bodies = by_cat[cat]
         if bodies:
-            body_block = "\n".join(bodies)
+            body_block = _merge_bodies(bodies)
             chunks.append(f"*) {cat}\n{body_block}")
         else:
             chunks.append(f"*) {cat}")
