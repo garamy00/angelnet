@@ -1276,8 +1276,8 @@ def register_routes(app: FastAPI) -> None:
         "email.subject_template": "주간업무보고 ({{ yy }}년 {{ ww }}주차)",
         # SMTP 발송 활성화 (true/false). 비활성이면 이메일 액션이 모두 차단.
         "email.enabled": "false",
-        # SMTP 서버 주소 (예: smtp.office365.com)
-        "email.smtp_host": "smtp.office365.com",
+        # SMTP 서버 주소 (예: smtp.office365.com, smtp.gmail.com)
+        "email.smtp_host": "",
         # SMTP 포트 (587 = STARTTLS, 465 = SMTPS)
         "email.smtp_port": "587",
         # STARTTLS 사용 여부 (587 일 때 true, 465 일 때 false 권장)
