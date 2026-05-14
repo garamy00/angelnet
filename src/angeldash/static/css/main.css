@@ -440,7 +440,10 @@ code {
 .ext-icon { font-size: 12px; opacity: 0.85; }
 
 /* ─── 주차 사이드바 (일일/주간업무보고) ─────────────── */
+/* main 기본 max-width:1100px 가운데 정렬을 풀고 화면 전체 폭을 사용 */
 main.with-sidebar {
+  max-width: none;
+  margin: 0;
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 16px;
