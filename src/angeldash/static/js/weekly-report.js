@@ -5,6 +5,17 @@ const COL_HEADERS = ['프로젝트', '지난주 한 일', '이번주 한 일/할
 
 let currentWeek = new URLSearchParams(location.search).get('week') || isoWeek(new Date());
 let currentRows = [];
+let weeklyNotebookId = '';
+
+async function loadWeeklyNotebookId() {
+  try {
+    const settings = await apiGet('/api/settings');
+    weeklyNotebookId = (settings['upnote.weekly_notebook_id'] || '').trim();
+  } catch (e) {
+    // 설정 로드 실패 — 비어있는 상태로 두고 버튼 동작 시 안내
+    weeklyNotebookId = '';
+  }
+}
 
 function shiftWeek(weekIso, delta) {
   // weekDates(weekIso)[0] = 월요일 'YYYY-MM-DD'
@@ -117,6 +128,13 @@ async function saveAll() {
 
 // ─── 액션 핸들러 ──────────────────────────────────
 
+function syncUrlToCurrentWeek() {
+  // 사용자가 현재 주차를 북마크할 수 있도록 URL ?week= 갱신
+  const url = new URL(location.href);
+  url.searchParams.set('week', currentWeek);
+  history.replaceState(null, '', url.toString());
+}
+
 document.getElementById('btn-generate-initial').addEventListener('click', async () => {
   try {
     const r = await apiPost(
@@ -164,14 +182,17 @@ document.getElementById('btn-add-row').addEventListener('click', async () => {
 
 document.getElementById('this-week').addEventListener('click', () => {
   currentWeek = isoWeek(new Date());
+  syncUrlToCurrentWeek();
   loadWeek();
 });
 document.getElementById('prev-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, -1);
+  syncUrlToCurrentWeek();
   loadWeek();
 });
 document.getElementById('next-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, +1);
+  syncUrlToCurrentWeek();
   loadWeek();
 });
 
@@ -251,6 +272,10 @@ document.getElementById('btn-upnote-weekly').addEventListener('click', async () 
     toast('보고서가 비어있습니다');
     return;
   }
+  if (!weeklyNotebookId) {
+    toast('주간업무보고 노트북 ID 를 설정 페이지에서 먼저 등록하세요');
+    return;
+  }
   try {
     await apiPost('/api/actions/weekly-report-upnote',
       { week_iso: currentWeek });
@@ -263,3 +288,4 @@ document.getElementById('btn-upnote-weekly').addEventListener('click', async () 
 // ─── 초기 로드 ───────────────────────────────────
 
 loadWeek();
+loadWeeklyNotebookId();
