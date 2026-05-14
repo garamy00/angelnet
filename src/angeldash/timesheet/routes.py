@@ -729,6 +729,8 @@ def register_routes(app: FastAPI) -> None:
         "join.auto_task_name": "개발",  # 프로젝트 가입 시 자동으로 가입할 task name
         # 일일업무보고 페이지 상단의 "진행중인 일정" 영역 (월간/주간 계획 보관용)
         "ongoing_schedule": "",
+        # 주간업무보고 페이지의 📤 UpNote 저장 — 일일 노트북과 분리된 노트북 ID
+        "upnote.weekly_notebook_id": "",
     }
 
     @app.get("/api/settings")
