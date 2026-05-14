@@ -749,9 +749,12 @@ def register_routes(app: FastAPI) -> None:
             ) from exc
         days_in_month = monthrange(year, month)[1]
 
-        # 회사 시스템 fetch — grid 가 핵심, 나머지는 실패해도 본 응답 유지
+        # 회사 시스템 fetch — grid 가 핵심, 나머지는 실패해도 본 응답 유지.
+        # detailed 호출로 task_name + work_type 분리 보존 ('[개발]', '[세미나]' 등).
         try:
-            grid = await client.fetch_jobtime_grid(year_month=year_month)
+            grid_rows = await client.fetch_jobtime_grid_detailed(
+                year_month=year_month,
+            )
         except Exception as exc:
             raise HTTPException(500, f"monthly grid fetch failed: {exc}") from exc
 
@@ -790,12 +793,18 @@ def register_routes(app: FastAPI) -> None:
                 continue
             holidays_out.append({"day": d.day, "label": label})
 
-        # tasks 집계 — 합계 0 제외
+        # tasks 집계 — 합계 0 제외. work_type 있으면 'task [work_type]' 으로 라벨.
         tasks: list[dict] = []
         daily_totals: dict[int, float] = {}
         month_total = 0.0
-        for task_name in sorted(grid.keys()):
-            days = grid[task_name]
+        # 표시 라벨 기준 sort — work_type 까지 포함되어 안정적 순서
+        def _label(row: dict) -> str:
+            name = row.get("task_name", "")
+            work_type = (row.get("work_type") or "").strip()
+            return f"{name} [{work_type}]" if work_type else name
+
+        for row in sorted(grid_rows, key=_label):
+            days = row.get("days", {})
             task_total = round(sum(days.values()), 2)
             if task_total <= 0:
                 continue  # 모두 0 인 task hide
@@ -805,7 +814,7 @@ def register_routes(app: FastAPI) -> None:
                     daily_totals.get(day, 0.0) + hours, 2,
                 )
             tasks.append({
-                "task_name": task_name,
+                "task_name": _label(row),
                 "days": days,
                 "total": task_total,
             })

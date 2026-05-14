@@ -1302,11 +1302,13 @@ def test_monthly_grid_returns_tasks_and_totals(api, mock_client):
     """월간 매트릭스 — task × day 그리드와 합계를 정확히 집계."""
     from unittest.mock import AsyncMock
 
-    # 회사 시스템: 두 task 가 5월에 입력
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화": {1: 8.0, 2: 4.0, 15: 8.0},
-        "SMSC 리빌딩": {2: 4.0, 16: 8.0},
-    })
+    # 회사 시스템: 두 task 가 5월에 입력 (work_type 분리 보존)
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "EM 고도화", "work_type": "개발",
+         "days": {1: 8.0, 2: 4.0, 15: 8.0}},
+        {"task_name": "SMSC 리빌딩", "work_type": "개발",
+         "days": {2: 4.0, 16: 8.0}},
+    ])
 
     r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
     assert r.status_code == 200
@@ -1314,14 +1316,17 @@ def test_monthly_grid_returns_tasks_and_totals(api, mock_client):
     assert body["year_month"] == "2026-05"
     assert body["days_in_month"] == 31
 
-    # task 순서는 이름순 (한글 비교)
+    # task 순서는 라벨순 (work_type 포함)
     task_names = [t["task_name"] for t in body["tasks"]]
     assert task_names == sorted(task_names)
+    # 라벨 포맷: 'task [work_type]'
+    assert "EM 고도화 [개발]" in task_names
+    assert "SMSC 리빌딩 [개발]" in task_names
 
     # task 별 합계
     by_name = {t["task_name"]: t for t in body["tasks"]}
-    assert by_name["EM 고도화"]["total"] == 20.0
-    assert by_name["SMSC 리빌딩"]["total"] == 12.0
+    assert by_name["EM 고도화 [개발]"]["total"] == 20.0
+    assert by_name["SMSC 리빌딩 [개발]"]["total"] == 12.0
 
     # 일별 합계 — 2일에 두 task 합쳐서 8
     # JSON keys 는 문자열로 들어옴
@@ -1344,7 +1349,7 @@ def test_monthly_grid_invalid_year_month_returns_400(api):
 def test_monthly_grid_empty_grid(api, mock_client):
     """task 가 없는 달도 정상 응답 (tasks=[], totals=0)."""
     from unittest.mock import AsyncMock
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
 
     r = api.get("/api/timesheet/monthly-grid?year_month=2026-04")
     assert r.status_code == 200
@@ -1358,24 +1363,62 @@ def test_monthly_grid_empty_grid(api, mock_client):
 def test_monthly_grid_filters_zero_total_tasks(api, mock_client):
     """합계 0 인 task 는 응답에 포함되지 않음."""
     from unittest.mock import AsyncMock
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "활성 task": {1: 4.0, 2: 4.0},
-        "0인 task": {},
-        "다른 0인 task": {1: 0.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "활성 task", "work_type": "개발",
+         "days": {1: 4.0, 2: 4.0}},
+        {"task_name": "0인 task", "work_type": "개발", "days": {}},
+        {"task_name": "다른 0인 task", "work_type": "개발",
+         "days": {1: 0.0}},
+    ])
     mock_client.list_vacations = AsyncMock(return_value=[])
     mock_client.list_holidays = AsyncMock(return_value=[])
 
     r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
     assert r.status_code == 200
     names = [t["task_name"] for t in r.json()["tasks"]]
-    assert names == ["활성 task"]
+    assert names == ["활성 task [개발]"]
+
+
+def test_monthly_grid_separates_same_task_by_work_type(api, mock_client):
+    """같은 task_name 이라도 work_type 이 다르면 별도 row."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "OAM 개선", "work_type": "개발",
+         "days": {1: 8.0, 2: 8.0}},
+        {"task_name": "OAM 개선", "work_type": "세미나",
+         "days": {3: 2.0}},
+    ])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    body = r.json()
+    names = [t["task_name"] for t in body["tasks"]]
+    assert "OAM 개선 [개발]" in names
+    assert "OAM 개선 [세미나]" in names
+    by_name = {t["task_name"]: t for t in body["tasks"]}
+    assert by_name["OAM 개선 [개발]"]["total"] == 16.0
+    assert by_name["OAM 개선 [세미나]"]["total"] == 2.0
+
+
+def test_monthly_grid_omits_brackets_when_work_type_empty(api, mock_client):
+    """work_type 이 빈 문자열이면 라벨에 '[]' 추가하지 않음."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "단일 task", "work_type": "", "days": {1: 4.0}},
+    ])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    names = [t["task_name"] for t in r.json()["tasks"]]
+    assert names == ["단일 task"]
 
 
 def test_monthly_grid_adds_vacation_rows_with_full_and_half(api, mock_client):
     """연차/공가/경조사/휴직 → 8h, 반차 → 4h 자동 적용. type 별 row 그룹화."""
     from unittest.mock import AsyncMock
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
     mock_client.list_holidays = AsyncMock(return_value=[])
     mock_client.list_vacations = AsyncMock(return_value=[
         # 회사 system 의 hours 값과 무관하게 type 기준으로 4/8 자동 결정
@@ -1405,7 +1448,7 @@ def test_monthly_grid_adds_vacation_rows_with_full_and_half(api, mock_client):
 def test_monthly_grid_holidays_exclude_labels(api, mock_client):
     """misc.holiday_exclude_labels 에 들어있는 label 은 휴일 list 에서 제외."""
     from unittest.mock import AsyncMock
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
     mock_client.list_vacations = AsyncMock(return_value=[])
     mock_client.list_holidays = AsyncMock(return_value=[
         {"date": "2026-05-01", "label": "노동절", "types": ["public"]},

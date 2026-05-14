@@ -325,6 +325,62 @@ class TimesheetClient:
                 out.append({"date": date_iso, "type": type_name, "hours": hours})
         return out
 
+    async def fetch_jobtime_grid_detailed(
+        self, *, year_month: str
+    ) -> list[dict[str, Any]]:
+        """그 달의 task × work_type × 일별 시간을 분리 보존해서 반환.
+
+        회사 시스템의 row data 형식: [task_name, work_type, 1일, ..., 말일, 월합계].
+        같은 task_name 이라도 work_type 이 다르면 ('[개발]', '[세미나]' 등) 별도 항목.
+
+        Returns:
+            [{"task_name": str, "work_type": str, "days": {day: hours}}, ...]
+        """
+        resp = await self._http.post(
+            self.JOBTIME_SEARCH_URL,
+            data={"dept_code": "", "year_month": year_month},
+        )
+        body = self._safe_json(resp, exc_type=ApiError)
+        if _is_bot_blocked(body):
+            raise BotBlockedError(str(body))
+        if resp.status_code >= 400:
+            raise ApiError(
+                f"fetch_jobtime_grid_detailed failed: status={resp.status_code}",
+                status_code=resp.status_code,
+                payload=body,
+            )
+        rows = body.get("rows", []) if isinstance(body, dict) else []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            rid = str(r.get("id", ""))
+            try:
+                if int(rid) < 0:
+                    continue
+            except ValueError:
+                continue
+            data = r.get("data", [])
+            if len(data) < 2:
+                continue
+            name = (data[0] or "").strip()
+            if not name:
+                continue
+            work_type = (data[1] or "").strip() if len(data) >= 2 else ""
+            day_hours: dict[int, float] = {}
+            # data[2..-2] 가 일별 시간. data[-1] 은 월 합계.
+            for day, value in enumerate(data[2:-1], start=1):
+                try:
+                    h = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if h > 0:
+                    day_hours[day] = h
+            out.append({
+                "task_name": name,
+                "work_type": work_type,
+                "days": day_hours,
+            })
+        return out
+
     async def fetch_jobtime_grid(
         self, *, year_month: str
     ) -> dict[str, dict[int, float]]:

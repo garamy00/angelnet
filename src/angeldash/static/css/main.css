@@ -657,7 +657,8 @@ a:hover { filter: brightness(1.2); }
 .modal-panel--wide {
   width: min(96vw, 1400px) !important;
 }
-.monthly-grid-body {
+/* .modal-body 의 흰 배경(이메일/UpNote 미리보기용)을 매트릭스에서는 overrides */
+.modal-body.monthly-grid-body {
   background: var(--color-surface);
   color: var(--color-text);
   padding: 0;
@@ -743,26 +744,22 @@ table.monthly-grid tfoot td.total-col {
   font-size: 14px;
 }
 
-/* 주말 — 토(파랑톤), 일(붉은톤) */
+/* 토/일/공휴일 — 모두 동일한 붉은 톤 (사용자 요청: 토요일도 공휴일과 같은 색) */
 table.monthly-grid .day-col.sat,
-table.monthly-grid .day-col.sat small {
-  color: #93c5fd;
-}
 table.monthly-grid .day-col.sun,
-table.monthly-grid .day-col.sun small {
+table.monthly-grid .day-col.hol,
+table.monthly-grid .day-col.sat small,
+table.monthly-grid .day-col.sun small,
+table.monthly-grid .day-col.hol small {
   color: #fca5a5;
 }
-/* 공휴일 — 일과 같은 붉은 톤 + 약간 진한 배경 */
 table.monthly-grid .day-col.hol,
 table.monthly-grid .day-col.hol small {
-  color: #fda4af;
   background: rgba(248, 113, 113, 0.12);
 }
 
-/* 셀 배경 — 주말 / 공휴일 */
-table.monthly-grid .cell.bg-wknd {
-  background: rgba(255, 255, 255, 0.04);
-}
+/* 셀 배경 — 주말/공휴일 모두 같은 분홍 톤 */
+table.monthly-grid .cell.bg-wknd,
 table.monthly-grid .cell.bg-hol {
   background: rgba(248, 113, 113, 0.08);
 }
