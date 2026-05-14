@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS mappings (
     category TEXT PRIMARY KEY,
     project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    excluded INTEGER NOT NULL DEFAULT 0
+    excluded INTEGER NOT NULL DEFAULT 0,
+    weekly_project_name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS week_notes (
@@ -127,6 +128,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     """스키마를 초기화한다 (멱등) + 필요 시 in-place migration 수행."""
     conn.executescript(SCHEMA)
     _migrate_projects_add_work_type(conn)
+    _migrate_mappings_add_weekly_project_name(conn)
     conn.commit()
 
 
@@ -158,6 +160,19 @@ def _migrate_projects_add_work_type(conn: sqlite3.Connection) -> None:
     """)
     conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Migrated projects table: added work_type column")
+
+
+def _migrate_mappings_add_weekly_project_name(conn: sqlite3.Connection) -> None:
+    """기존 mappings 테이블에 weekly_project_name 컬럼이 없으면 ALTER TABLE 로 추가.
+
+    멱등 (PRAGMA 로 컬럼 존재 여부 확인 후 추가). 신규 사용자는 CREATE TABLE 에
+    이미 포함이라 no-op.
+    """
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(mappings)")}
+    if "weekly_project_name" in cols:
+        return
+    conn.execute("ALTER TABLE mappings ADD COLUMN weekly_project_name TEXT")
+    conn.commit()
 
 
 # ─── days / entries ────────────────────────────────────
@@ -298,13 +313,25 @@ def set_mapping(
     *,
     project_id: int | None,
     excluded: bool = False,
+    weekly_project_name: str | None = None,
 ) -> None:
-    """카테고리 매핑 upsert. project_id=None + excluded=True 면 의도적 미입력."""
+    """카테고리 매핑 upsert.
+
+    project_id=None + excluded=True 면 의도적 미입력.
+    weekly_project_name: 주간업무보고 표 프로젝트명. 빈 문자열 정규화.
+    """
+    # 빈 문자열 → None 정규화 (NULL 과 빈 문자열을 같은 의미로 취급)
+    if weekly_project_name is not None:
+        normalized = weekly_project_name.strip()
+        weekly_project_name = normalized or None
     conn.execute(
-        "INSERT INTO mappings(category, project_id, excluded) VALUES(?, ?, ?) "
+        "INSERT INTO mappings(category, project_id, excluded, weekly_project_name) "
+        "VALUES(?, ?, ?, ?) "
         "ON CONFLICT(category) DO UPDATE SET "
-        "  project_id = excluded.project_id, excluded = excluded.excluded",
-        (category, project_id, 1 if excluded else 0),
+        "  project_id = excluded.project_id, "
+        "  excluded = excluded.excluded, "
+        "  weekly_project_name = excluded.weekly_project_name",
+        (category, project_id, 1 if excluded else 0, weekly_project_name),
     )
     conn.commit()
 
@@ -314,7 +341,7 @@ def get_mapping(
 ) -> dict[str, Any] | None:
     """카테고리 매핑 + 프로젝트명을 함께 반환. 없으면 None."""
     row = conn.execute(
-        "SELECT m.category, m.project_id, m.excluded, "
+        "SELECT m.category, m.project_id, m.excluded, m.weekly_project_name, "
         "       p.name AS project_name, p.work_type AS project_work_type "
         "FROM mappings m LEFT JOIN projects p ON p.id = m.project_id "
         "WHERE m.category = ?",
@@ -334,7 +361,7 @@ def list_mappings(
     since_date=None 이면 entries 전체 (legacy 동작).
     """
     rows = conn.execute(
-        "SELECT m.category, m.project_id, m.excluded, "
+        "SELECT m.category, m.project_id, m.excluded, m.weekly_project_name, "
         "       p.name AS project_name, p.work_type AS project_work_type "
         "FROM mappings m LEFT JOIN projects p ON p.id = m.project_id"
     ).fetchall()
@@ -367,6 +394,7 @@ def list_mappings(
             "project_id": None,
             "excluded": False,
             "project_name": None,
+            "weekly_project_name": None,
         })
     result.sort(key=lambda x: x["category"])
     return result

@@ -285,3 +285,67 @@ def test_upsert_weekly_report_round_trip(conn: sqlite3.Connection) -> None:
     result = db.get_weekly_report(conn, "2026-W20")
     assert result["rows"] == rows
     assert result["updated_at"] == updated_at
+
+
+# ─── mappings.weekly_project_name 컬럼 ──────────────
+
+
+def test_migrate_adds_weekly_project_name_column(conn: sqlite3.Connection) -> None:
+    """기존 DB 에 weekly_project_name 컬럼이 없는 상태를 시뮬레이션 후 마이그레이션."""
+    from angeldash.timesheet import db
+    # 컬럼 강제 제거 (rebuild) — 컬럼 없는 mappings 테이블로 시작
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.executescript("""
+    DROP TABLE IF EXISTS mappings;
+    CREATE TABLE mappings (
+        category TEXT PRIMARY KEY,
+        project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        excluded INTEGER NOT NULL DEFAULT 0
+    );
+    """)
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    cols_before = {r["name"] for r in conn.execute("PRAGMA table_info(mappings)")}
+    assert "weekly_project_name" not in cols_before
+
+    db._migrate_mappings_add_weekly_project_name(conn)
+
+    cols_after = {r["name"] for r in conn.execute("PRAGMA table_info(mappings)")}
+    assert "weekly_project_name" in cols_after
+
+    # idempotent: 두 번째 호출이 에러 없이 동작
+    db._migrate_mappings_add_weekly_project_name(conn)
+
+
+def test_set_mapping_with_weekly_project_name_round_trip(
+    conn: sqlite3.Connection,
+) -> None:
+    """set_mapping(weekly_project_name=...) → get_mapping 으로 값 유지."""
+    from angeldash.timesheet import db
+    conn.execute("INSERT INTO projects(id, name, active) VALUES(1, 'X 프로젝트', 1)")
+    db.set_mapping(
+        conn, "EM 고도화",
+        project_id=1, excluded=False, weekly_project_name="OAM",
+    )
+    row = db.get_mapping(conn, "EM 고도화")
+    assert row["weekly_project_name"] == "OAM"
+    assert row["project_id"] == 1
+
+
+def test_list_mappings_includes_weekly_project_name(
+    conn: sqlite3.Connection,
+) -> None:
+    """list_mappings 응답 dict 에 weekly_project_name 키가 존재."""
+    from angeldash.timesheet import db
+    conn.execute("INSERT INTO projects(id, name, active) VALUES(2, 'Y', 1)")
+    db.set_mapping(
+        conn, "AI 세미나",
+        project_id=2, excluded=False, weekly_project_name="공통개발",
+    )
+    db.set_mapping(
+        conn, "기타", project_id=2, excluded=False,
+    )
+    items = {m["category"]: m for m in db.list_mappings(conn)}
+    assert items["AI 세미나"]["weekly_project_name"] == "공통개발"
+    # 미설정 매핑은 None
+    assert items["기타"]["weekly_project_name"] is None
