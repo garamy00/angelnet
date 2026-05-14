@@ -94,6 +94,9 @@ function renderDay(day, vacations, holiday) {
   wrap.className = 'day-block';
   if (holiday) wrap.classList.add('day-block--holiday');
   wrap.dataset.date = day.date;
+  // 좌측 stripe 색상 결정용 — CSS 가 [data-weekday], [data-has-vacation] 셀렉터 사용
+  wrap.dataset.weekday = String(new Date(day.date + 'T00:00:00').getDay());
+  wrap.dataset.hasVacation = vacations.length > 0 ? 'true' : 'false';
   // 휴가 시간은 updateDayTotals 에서 entries 합과 함께 더해 합계에 반영한다.
   const totalVacHours = vacations.reduce((a, v) => a + v.hours, 0);
   wrap.dataset.vacationHours = String(totalVacHours);
