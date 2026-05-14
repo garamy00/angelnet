@@ -18,6 +18,15 @@
     <span id="user-label" class="muted"></span>
   </header>
   <main>
+    <details id="ongoing-schedule" open>
+      <summary>
+        <span>📌 진행중인 일정</span>
+        <button id="btn-copy-schedule" title="전체 텍스트를 클립보드로 복사">📋 복사</button>
+      </summary>
+      <textarea id="ongoing-schedule-text"
+                placeholder="월간/주간 계획, 차주 예정 등 자유 형식. 일일/주간 보고에 복사해 쓰세요."></textarea>
+    </details>
+
     <section class="week-header">
       <button id="prev-week">◀ 이전 주</button>
       <span id="week-label">로딩…</span>

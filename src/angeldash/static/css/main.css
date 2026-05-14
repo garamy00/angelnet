@@ -525,3 +525,42 @@ main section h3 {
 /* 링크 */
 a { color: var(--color-accent); }
 a:hover { filter: brightness(1.2); }
+
+/* ─── 진행중인 일정 (일일업무보고 상단 영역) ─────────────── */
+#ongoing-schedule {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+}
+#ongoing-schedule summary {
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+}
+#ongoing-schedule summary::-webkit-details-marker { display: none; }
+#ongoing-schedule summary::before {
+  content: "▶ ";
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-right: 6px;
+}
+#ongoing-schedule[open] summary::before { content: "▼ "; }
+#ongoing-schedule textarea {
+  width: 100%;
+  min-height: 200px;
+  margin-top: 10px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+#btn-copy-schedule {
+  font-size: 12px;
+  padding: 4px 10px;
+}

@@ -544,3 +544,40 @@ document.getElementById('btn-excel').addEventListener('click', async () => {
   await loadMe();
   await loadWeek();
 })();
+
+// ─── 진행중인 일정 (상단 영역) ──────────────────────────
+async function loadOngoingSchedule() {
+  try {
+    const settings = await apiGet('/api/settings');
+    document.getElementById('ongoing-schedule-text').value = settings.ongoing_schedule || '';
+  } catch (e) {
+    toast(`일정 로드 실패: ${e.message}`, 'fail');
+  }
+}
+
+document.getElementById('ongoing-schedule-text').addEventListener('blur', async (e) => {
+  try {
+    await apiPut('/api/settings', { ongoing_schedule: e.target.value });
+  } catch (err) {
+    toast(`일정 저장 실패: ${err.message}`, 'fail');
+  }
+});
+
+document.getElementById('btn-copy-schedule').addEventListener('click', async (e) => {
+  // <summary> 안의 button 은 기본 동작이 details 토글이라 즉시 차단
+  e.preventDefault();
+  e.stopPropagation();
+  const text = document.getElementById('ongoing-schedule-text').value;
+  if (!text) {
+    toast('복사할 내용이 없습니다');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('진행중인 일정 복사됨');
+  } catch (err) {
+    toast(`복사 실패: ${err.message}`, 'fail');
+  }
+});
+
+loadOngoingSchedule();
