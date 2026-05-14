@@ -149,6 +149,55 @@ def test_render_html_table_escapes_html_chars_in_cells() -> None:
     assert "<script>" not in html
 
 
+def test_render_weekly_upnote_text_section_format() -> None:
+    """주간보고 UpNote 본문 — 프로젝트별 헤더 + 컬럼별 sub-block plain text."""
+    rows = [
+        {
+            "project_name": "OAM 개선",
+            "last_week": "*) EM 고도화\n  - 코어 인프라",
+            "this_week": "*) EM 고도화\n  - 핵심 인터페이스",
+            "next_week": "",
+            "note": "",
+        },
+        {
+            "project_name": "기타",
+            "last_week": "",
+            "this_week": "*) 휴가\n - 연차\n   . 손대곤(05/15, 금)",
+            "next_week": "", "note": "",
+        },
+    ]
+    out = weekly_table.render_weekly_upnote_text(rows)
+    # 프로젝트 헤더
+    assert "# OAM 개선" in out
+    assert "# 기타" in out
+    # 컬럼 라벨
+    assert "[지난주 한 일]" in out
+    assert "[이번주 한 일/할 일]" in out
+    # 본문 내용
+    assert "*) EM 고도화" in out
+    assert "- 코어 인프라" in out
+    assert "- 핵심 인터페이스" in out
+    assert "*) 휴가" in out
+    # 비어있는 컬럼은 헤더 안 나옴
+    assert "[다음주 할 일]" not in out
+    assert "[비고]" not in out
+    # 프로젝트 간 separator
+    assert "=" * 50 in out
+
+
+def test_render_weekly_upnote_text_skips_empty_project() -> None:
+    """모든 컬럼이 비어있는 프로젝트는 출력에서 제외."""
+    rows = [
+        {"project_name": "비어있음", "last_week": "", "this_week": "",
+         "next_week": "", "note": ""},
+        {"project_name": "있음", "last_week": "X", "this_week": "",
+         "next_week": "", "note": ""},
+    ]
+    out = weekly_table.render_weekly_upnote_text(rows)
+    assert "# 있음" in out
+    assert "# 비어있음" not in out
+
+
 def test_render_email_plain_omits_empty_greeting_and_closing() -> None:
     rows = [{"project_name": "P1", "last_week": "", "this_week": "",
              "next_week": "", "note": ""}]

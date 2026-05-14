@@ -589,6 +589,42 @@ def render_email_plain(
     return "\n\n".join(chunks)
 
 
+def render_weekly_upnote_text(rows: list[dict]) -> str:
+    """주간업무보고 UpNote 본문 — 프로젝트별 섹션 plain text.
+
+    markdown 표 형식은 셀 안 줄바꿈(<br>) 과 강조(**\\*)…**) 가 UpNote 의
+    wrap_in_code_block 안에서 raw 로 노출되어 가독성이 떨어진다. 표를 포기하고
+    프로젝트별 헤더 + 컬럼별 sub-block 으로 풀면 wrap_in_code_block 모드 안에서도
+    mono-font 코드블록 안에 들여쓰기가 그대로 보존되어 자연스럽게 보인다.
+    """
+    sections = (
+        ("지난주 한 일", "last_week"),
+        ("이번주 한 일/할 일", "this_week"),
+        ("다음주 할 일", "next_week"),
+        ("비고", "note"),
+    )
+
+    blocks: list[str] = []
+    for r in rows:
+        name = (r.get("project_name") or "").strip() or "(이름 없음)"
+        lines: list[str] = [f"# {name}", ""]
+        any_section = False
+        for label, key in sections:
+            body = (r.get(key) or "").rstrip()
+            if not body:
+                continue
+            any_section = True
+            lines.append(f"[{label}]")
+            lines.append(body)
+            lines.append("")
+        if not any_section:
+            # 모든 컬럼 비어있는 프로젝트는 헤더만 남기지 않고 skip
+            continue
+        blocks.append("\n".join(lines).rstrip())
+
+    return ("\n" + "=" * 50 + "\n\n").join(blocks)
+
+
 def render_markdown_table(rows: list[dict]) -> str:
     """마크다운 표 (UpNote 본문 + plain 폴백).
 
