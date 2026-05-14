@@ -26,12 +26,20 @@
       <label>노트북 이름 — 주간업무보고 (팀장 보고용)
         <input id="weekly-notebook-id" type="text" placeholder="### 주간업무보고 ###">
       </label>
+      <label>주간업무보고 노트 제목 템플릿
+        <input id="weekly-title-template" type="text"
+               placeholder="주간업무 보고[{{ yyyy }}.{{ mm }}.{{ ww_of_month }}주]">
+      </label>
       <p class="muted">
         UpNote 의 <code>note/new</code> 의 <code>notebook</code> 파라미터에 전달할 노트북 이름.
         하위 노트북은 슬래시(<code>/</code>) 로 경로 표기 (예: <code>업무/2026</code>).
         일일/주간 노트(상단)는 본인 기록용 — 일일업무보고 페이지의 🔄 UpNote 저장(주) 가 사용.
         주간업무보고(하단)는 팀장 보고용 — 주간업무보고 페이지의 📤 UpNote 저장 이 사용.
-        비워두면 해당 액션 비활성화.
+        비워두면 해당 액션 비활성화.<br>
+        주간 제목 변수: <code>{{ yyyy }}</code>, <code>{{ yy }}</code>,
+        <code>{{ mm }}</code>, <code>{{ ww }}</code> (ISO 주차),
+        <code>{{ ww_of_month }}</code> (월의 몇 번째 주),
+        <code>{{ week_start_mmdd }}</code>, <code>{{ week_end_mmdd }}</code>.
       </p>
 
       <label>본문을 코드 블록으로 감싸기

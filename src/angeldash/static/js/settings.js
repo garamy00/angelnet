@@ -4,6 +4,7 @@ import { apiGet, apiPut, apiPost, isoWeek, toast } from './api.js';
 const KEYS = {
   'notebook-id': 'upnote.notebook_id',
   'weekly-notebook-id': 'upnote.weekly_notebook_id',
+  'weekly-title-template': 'upnote.weekly_title_template',
   't-team-report': 'team_report.template',
   't-upnote-title': 'upnote.title_template',
   't-upnote-body': 'upnote.body_template',

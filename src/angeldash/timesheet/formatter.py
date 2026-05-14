@@ -71,17 +71,27 @@ def _day_obj(date_str: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _week_globals(week_iso: str) -> dict[str, Any]:
-    """{yy, ww, week_start, week_end, week_start_mmdd, week_end_mmdd, week_label}."""
+    """주차 관련 ctx 변수.
+
+    포함: yy, yyyy, ww (ISO 주차), mm (월요일 기준 월),
+          ww_of_month (월의 몇 번째 주), week_start/end, week_start_mmdd 등.
+
+    ww_of_month 는 월요일의 일자 기준 — 1~7일은 1주, 8~14일은 2주, ...
+    """
     year_str, w_str = week_iso.split("-W")
     year = int(year_str)
     week = int(w_str)
     # ISO 주는 월요일~일요일, 우리는 월~금만 다룬다 (출력에 영향 없음)
     monday = datetime.date.fromisocalendar(year, week, 1)
     friday = monday + datetime.timedelta(days=4)
+    # 월의 몇 번째 주 — 월요일의 day 기준. 1주차 = 그 달의 첫 월~7일.
+    week_of_month = (monday.day - 1) // 7 + 1
     return {
         "yy": f"{year % 100:02d}",
         "yyyy": str(year),
         "ww": f"{week:02d}",
+        "mm": f"{monday.month:02d}",
+        "ww_of_month": str(week_of_month),
         "week_iso": week_iso,
         "week_start": monday.isoformat(),
         "week_end": friday.isoformat(),

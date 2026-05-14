@@ -149,6 +149,37 @@ def test_render_html_table_escapes_html_chars_in_cells() -> None:
     assert "<script>" not in html
 
 
+def test_week_globals_mm_and_ww_of_month() -> None:
+    """월요일 기준 mm/ww_of_month 가 정확히 계산된다."""
+    from angeldash.timesheet import formatter
+
+    # 2026-W20 → 월요일 = 2026-05-11 → 5월 2주차
+    g = formatter._week_globals("2026-W20")
+    assert g["mm"] == "05"
+    assert g["ww_of_month"] == "2"
+
+    # 2023-W43 → 월요일 = 2023-10-23 → 10월 4주차 (사용자 예시)
+    g = formatter._week_globals("2023-W43")
+    assert g["yyyy"] == "2023"
+    assert g["mm"] == "10"
+    assert g["ww_of_month"] == "4"
+
+    # 2026-W18 → 월요일 = 2026-04-27 → 4월 4주차 (29-31 일 = 5주는 다음 주)
+    g = formatter._week_globals("2026-W18")
+    assert g["mm"] == "04"
+    assert g["ww_of_month"] == "4"
+
+
+def test_week_globals_user_title_template_renders() -> None:
+    """사용자 예시 형식 '주간업무 보고[2023.10.4주]' 가 정확히 렌더된다."""
+    from angeldash.timesheet import formatter
+
+    tmpl = "주간업무 보고[{{ yyyy }}.{{ mm }}.{{ ww_of_month }}주]"
+    ctx = formatter._week_globals("2023-W43")
+    out = formatter.render_upnote_title(tmpl, ctx)
+    assert out == "주간업무 보고[2023.10.4주]"
+
+
 def test_render_markdown_table_preserves_indent_with_nbsp() -> None:
     """markdown 표 셀 안 들여쓰기를 &nbsp; 로 변환 — UpNote markdown 모드에서 보존."""
     rows = [

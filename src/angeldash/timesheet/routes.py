@@ -976,9 +976,10 @@ def register_routes(app: FastAPI) -> None:
                 "설정 페이지에서 주간업무보고 노트북 ID 를 먼저 등록하세요.",
             )
 
+        # 주간업무보고 전용 제목 템플릿 (일일과 분리)
         title_template = (
-            db_module.get_setting(conn, "upnote.title_template")
-            or SETTING_DEFAULTS["upnote.title_template"]
+            db_module.get_setting(conn, "upnote.weekly_title_template")
+            or SETTING_DEFAULTS["upnote.weekly_title_template"]
         )
         # 주간업무보고는 markdown 표가 필수 — 사용자 setting (일일보고용
         # markdown=false / wrap=true) 을 무시하고 항상 markdown 렌더 + wrap off.
@@ -1215,6 +1216,11 @@ def register_routes(app: FastAPI) -> None:
         "ongoing_schedule": "",
         # 주간업무보고 페이지의 📤 UpNote 저장 — 일일 노트북과 분리된 노트북 ID
         "upnote.weekly_notebook_id": "",
+        # 주간업무보고 UpNote 제목 (Jinja2). 일일과 다른 형식이 필요해 별도 키.
+        # ww_of_month = 월의 몇 번째 주, mm = 월요일 기준 월.
+        "upnote.weekly_title_template": (
+            "주간업무 보고[{{ yyyy }}.{{ mm }}.{{ ww_of_month }}주]"
+        ),
         # 주간업무보고 휴가 행 표시명 (직급 포함 가능). 비면 client.user.name fallback.
         "report.author_name": "",
         # 주간업무보고 이메일 본문 — 표 위에 들어가는 인사말 (plain text, 여러 줄 가능)
@@ -1260,6 +1266,7 @@ def register_routes(app: FastAPI) -> None:
 
         template_keys = {
             "upnote.title_template",
+            "upnote.weekly_title_template",
             "upnote.body_template",
             "team_report.template",
         }
