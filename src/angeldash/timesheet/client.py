@@ -328,13 +328,20 @@ class TimesheetClient:
     async def fetch_jobtime_grid_detailed(
         self, *, year_month: str
     ) -> list[dict[str, Any]]:
-        """그 달의 task × work_type × 일별 시간을 분리 보존해서 반환.
+        """그 달의 task 메타 + 일별 시간을 분리 보존해서 반환.
 
-        회사 시스템의 row data 형식: [task_name, work_type, 1일, ..., 말일, 월합계].
-        같은 task_name 이라도 work_type 이 다르면 ('[개발]', '[세미나]' 등) 별도 항목.
+        회사 시스템의 row 형식이 회계 항목에 따라 텍스트 컬럼 수가 다르다
+        (단순 task: [name, work_type, 1일, …], 트리 구조: [root, sub, leaf, 1일, …]
+         처럼 1~3개). 첫 float 변환 가능한 위치부터 일별 시간으로 간주하고,
+        그 앞까지의 텍스트들을 메타로 모은다.
+
+        label 규칙:
+        - texts 가 1개   → "{texts[0]}"
+        - texts 가 2개+  → "{texts[0]} [{texts[-1]}]" (root + leaf, 같으면 root만)
 
         Returns:
-            [{"task_name": str, "work_type": str, "days": {day: hours}}, ...]
+            [{"task_name": <root>, "label": <표시 라벨>, "work_type": <leaf or "">,
+              "days": {day: hours}}, ...]
         """
         resp = await self._http.post(
             self.JOBTIME_SEARCH_URL,
@@ -359,24 +366,44 @@ class TimesheetClient:
             except ValueError:
                 continue
             data = r.get("data", [])
-            if len(data) < 2:
+            if not data:
                 continue
-            name = (data[0] or "").strip()
-            if not name:
-                continue
-            work_type = (data[1] or "").strip() if len(data) >= 2 else ""
+
+            # 텍스트 메타 / 일별 시간 분리 — 첫 float-가능 셀까지 텍스트로 모음
+            texts: list[str] = []
+            nums: list[float] = []
+            for v in data:
+                if not nums:
+                    try:
+                        nums.append(float(v))
+                    except (TypeError, ValueError):
+                        texts.append(str(v or "").strip())
+                else:
+                    try:
+                        nums.append(float(v))
+                    except (TypeError, ValueError):
+                        nums.append(0.0)
+
+            if not texts or not texts[0]:
+                continue  # 합계/소계 행 등
+
+            # 마지막 num 은 월합계, 그 앞이 일별
             day_hours: dict[int, float] = {}
-            # data[2..-2] 가 일별 시간. data[-1] 은 월 합계.
-            for day, value in enumerate(data[2:-1], start=1):
-                try:
-                    h = float(value)
-                except (TypeError, ValueError):
-                    continue
+            for day, h in enumerate(nums[:-1], start=1):
                 if h > 0:
                     day_hours[day] = h
+
+            root = texts[0]
+            leaf = texts[-1] if len(texts) > 1 else ""
+            if leaf and leaf != root:
+                label = f"{root} [{leaf}]"
+            else:
+                label = root
+
             out.append({
-                "task_name": name,
-                "work_type": work_type,
+                "task_name": root,
+                "label": label,
+                "work_type": leaf,
                 "days": day_hours,
             })
         return out

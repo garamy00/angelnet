@@ -501,6 +501,89 @@ def test_timesheet_actual_submit_calls_search_then_save(api, mock_client):
     }]
 
 
+def test_timesheet_submit_matches_by_work_type(api, mock_client):
+    """같은 task name 의 두 work_type 중 project.work_type 으로 정확히 매칭."""
+    mock_client.user_id = "alice"
+    # 회사 시스템: 같은 이름 두 task — work_type 만 다름
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "30001", "name": "행정, 공통개발업무",
+         "work_type": "개발"},
+        {"task_id": "30002", "name": "행정, 공통개발업무",
+         "work_type": "세미나"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "AI 세미나", "hours": 2, "body_md": ""}],
+    })
+    # 프로젝트 등록 — work_type='세미나' 명시
+    pid = api.post("/api/projects", json={
+        "name": "행정, 공통개발업무",
+        "remote_id": "행정, 공통개발업무",
+        "work_type": "세미나",
+    }).json()["id"]
+    api.put("/api/mappings/AI 세미나",
+            json={"project_id": pid, "excluded": False})
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    # [세미나] 의 task_id 인 30002 가 선택되어야 함 (30001 [개발] 이 아님)
+    assert rows[0]["task_id"] == "30002"
+
+
+def test_timesheet_submit_falls_back_to_name_only_for_legacy_projects(
+    api, mock_client,
+):
+    """project.work_type 이 비어있는 기존 등록 데이터 — name 만으로 매칭."""
+    mock_client.user_id = "alice"
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "40001", "name": "단순 task", "work_type": "개발"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+    # work_type 미지정 (기존 데이터 시뮬레이션)
+    pid = api.post("/api/projects", json={
+        "name": "단순 task", "remote_id": "단순 task",
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    assert rows[0]["task_id"] == "40001"
+
+
+def test_push_one_matches_by_work_type(api, mock_client):
+    """push-one 도 task_work_type 으로 정확 매칭."""
+    mock_client.user_id = "alice"
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "50001", "name": "행정", "work_type": "개발"},
+        {"task_id": "50002", "name": "행정", "work_type": "세미나"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    r = api.post("/api/actions/timesheet-push-one", json={
+        "date": "2026-05-12", "task_name": "행정",
+        "task_work_type": "세미나", "hours": 3,
+    })
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    assert rows[0]["task_id"] == "50002"
+
+
 def test_timesheet_blocks_when_mapping_missing(api):
     """매핑 누락 항목이 있으면 실제 호출은 400."""
     api.put("/api/days/2026-05-12", json={
@@ -1304,10 +1387,10 @@ def test_monthly_grid_returns_tasks_and_totals(api, mock_client):
 
     # 회사 시스템: 두 task 가 5월에 입력 (work_type 분리 보존)
     mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
-        {"task_name": "EM 고도화", "work_type": "개발",
-         "days": {1: 8.0, 2: 4.0, 15: 8.0}},
-        {"task_name": "SMSC 리빌딩", "work_type": "개발",
-         "days": {2: 4.0, 16: 8.0}},
+        {"task_name": "EM 고도화", "label": "EM 고도화 [개발]",
+         "work_type": "개발", "days": {1: 8.0, 2: 4.0, 15: 8.0}},
+        {"task_name": "SMSC 리빌딩", "label": "SMSC 리빌딩 [개발]",
+         "work_type": "개발", "days": {2: 4.0, 16: 8.0}},
     ])
 
     r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
@@ -1364,11 +1447,12 @@ def test_monthly_grid_filters_zero_total_tasks(api, mock_client):
     """합계 0 인 task 는 응답에 포함되지 않음."""
     from unittest.mock import AsyncMock
     mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
-        {"task_name": "활성 task", "work_type": "개발",
-         "days": {1: 4.0, 2: 4.0}},
-        {"task_name": "0인 task", "work_type": "개발", "days": {}},
-        {"task_name": "다른 0인 task", "work_type": "개발",
-         "days": {1: 0.0}},
+        {"task_name": "활성 task", "label": "활성 task [개발]",
+         "work_type": "개발", "days": {1: 4.0, 2: 4.0}},
+        {"task_name": "0인 task", "label": "0인 task [개발]",
+         "work_type": "개발", "days": {}},
+        {"task_name": "다른 0인 task", "label": "다른 0인 task [개발]",
+         "work_type": "개발", "days": {1: 0.0}},
     ])
     mock_client.list_vacations = AsyncMock(return_value=[])
     mock_client.list_holidays = AsyncMock(return_value=[])
@@ -1383,10 +1467,10 @@ def test_monthly_grid_separates_same_task_by_work_type(api, mock_client):
     """같은 task_name 이라도 work_type 이 다르면 별도 row."""
     from unittest.mock import AsyncMock
     mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
-        {"task_name": "OAM 개선", "work_type": "개발",
-         "days": {1: 8.0, 2: 8.0}},
-        {"task_name": "OAM 개선", "work_type": "세미나",
-         "days": {3: 2.0}},
+        {"task_name": "OAM 개선", "label": "OAM 개선 [개발]",
+         "work_type": "개발", "days": {1: 8.0, 2: 8.0}},
+        {"task_name": "OAM 개선", "label": "OAM 개선 [세미나]",
+         "work_type": "세미나", "days": {3: 2.0}},
     ])
     mock_client.list_vacations = AsyncMock(return_value=[])
     mock_client.list_holidays = AsyncMock(return_value=[])
@@ -1402,10 +1486,11 @@ def test_monthly_grid_separates_same_task_by_work_type(api, mock_client):
 
 
 def test_monthly_grid_omits_brackets_when_work_type_empty(api, mock_client):
-    """work_type 이 빈 문자열이면 라벨에 '[]' 추가하지 않음."""
+    """label 자체에 brackets 없으면 그대로 표시 (work_type 비었을 때)."""
     from unittest.mock import AsyncMock
     mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
-        {"task_name": "단일 task", "work_type": "", "days": {1: 4.0}},
+        {"task_name": "단일 task", "label": "단일 task",
+         "work_type": "", "days": {1: 4.0}},
     ])
     mock_client.list_vacations = AsyncMock(return_value=[])
     mock_client.list_holidays = AsyncMock(return_value=[])

@@ -432,6 +432,7 @@ function applyVerifyResult(items) {
           await apiPost('/api/actions/timesheet-push-one', {
             date: info.date,
             task_name: info.task_name,
+            task_work_type: info.task_work_type || '',
             hours: info.local_task_total,
           });
           toast('회사 시스템에 푸시됨');

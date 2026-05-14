@@ -96,6 +96,10 @@ class TimesheetPushOneInput(BaseModel):
     date: str  # 'YYYY-MM-DD'
     task_name: str
     hours: float  # 0 이면 그 셀 삭제와 동일
+    # 회사 시스템에 같은 name 의 task 가 work_type 만 달라 여러 개 등록될 수
+    # 있어 (예: '행정 [개발]', '행정 [세미나]') 정확한 매칭에 필수.
+    # 호환을 위해 optional; 비면 name 만으로 매칭 (기존 동작).
+    task_work_type: str = ""
 
 
 class WeeklyReportInput(BaseModel):
@@ -602,16 +606,21 @@ def register_routes(app: FastAPI) -> None:
                 items.append({**e, "sync_status": "excluded"})
                 continue
             project = conn.execute(
-                "SELECT name, remote_id FROM projects WHERE id = ?",
+                "SELECT name, remote_id, work_type FROM projects WHERE id = ?",
                 (m["project_id"],),
             ).fetchone()
             task_name = (
                 (project["remote_id"] or "").strip() if project else ""
             )
+            task_work_type = (
+                (project["work_type"] or "").strip() if project else ""
+            )
             if not task_name:
                 items.append({**e, "sync_status": "no_remote_id"})
                 continue
-            to_check.append({**e, "task_name": task_name})
+            to_check.append({
+                **e, "task_name": task_name, "task_work_type": task_work_type,
+            })
             needed_months.add(e["date"][:7])
 
         # 월별 search.json grid 호출
@@ -793,17 +802,11 @@ def register_routes(app: FastAPI) -> None:
                 continue
             holidays_out.append({"day": d.day, "label": label})
 
-        # tasks 집계 — 합계 0 제외. work_type 있으면 'task [work_type]' 으로 라벨.
+        # tasks 집계 — 합계 0 제외. 라벨은 client 가 만든 'label' 필드 그대로.
         tasks: list[dict] = []
         daily_totals: dict[int, float] = {}
         month_total = 0.0
-        # 표시 라벨 기준 sort — work_type 까지 포함되어 안정적 순서
-        def _label(row: dict) -> str:
-            name = row.get("task_name", "")
-            work_type = (row.get("work_type") or "").strip()
-            return f"{name} [{work_type}]" if work_type else name
-
-        for row in sorted(grid_rows, key=_label):
+        for row in sorted(grid_rows, key=lambda r: r.get("label") or ""):
             days = row.get("days", {})
             task_total = round(sum(days.values()), 2)
             if task_total <= 0:
@@ -814,7 +817,7 @@ def register_routes(app: FastAPI) -> None:
                     daily_totals.get(day, 0.0) + hours, 2,
                 )
             tasks.append({
-                "task_name": _label(row),
+                "task_name": row.get("label") or row.get("task_name") or "",
                 "days": days,
                 "total": task_total,
             })
@@ -1503,11 +1506,14 @@ def register_routes(app: FastAPI) -> None:
                               "project_name": None, "task_name": None})
                 continue
             project = conn.execute(
-                "SELECT name, remote_id FROM projects WHERE id = ?",
+                "SELECT name, remote_id, work_type FROM projects WHERE id = ?",
                 (m["project_id"],),
             ).fetchone()
             task_name = (
                 (project["remote_id"] or "").strip() if project else ""
+            )
+            task_work_type = (
+                (project["work_type"] or "").strip() if project else ""
             )
             if not task_name:
                 items.append({**e, "status": "missing_remote_id",
@@ -1517,8 +1523,10 @@ def register_routes(app: FastAPI) -> None:
                 continue
             items.append({**e, "status": "ready",
                           "project_name": m["project_name"],
-                          "task_name": task_name})
-            ready.append({**e, "task_name": task_name})
+                          "task_name": task_name,
+                          "task_work_type": task_work_type})
+            ready.append({**e, "task_name": task_name,
+                          "task_work_type": task_work_type})
 
         if payload.dry_run:
             return {"items": items, "missing": missing_categories}
@@ -1530,9 +1538,13 @@ def register_routes(app: FastAPI) -> None:
         if not ready:
             return {"items": items, "results": [], "missing": []}
 
-        # 필요한 월별 list_jobtime_tasks 호출 → name → task_id 맵
+        # list_jobtime_tasks → (name, work_type) → task_id 맵.
+        # 같은 name 의 task 가 work_type 만 다르게 여러 개 등록될 수 있어
+        # 두 컬럼 모두를 key 로 한다. project.work_type 이 빈 (기존 데이터)
+        # 경우 호환을 위해 name-only fallback 도 같이 둔다.
         months = sorted({e["date"][:7] for e in ready})
-        task_id_by_month: dict[str, dict[str, str]] = {}
+        task_id_by_month: dict[str, dict[tuple[str, str], str]] = {}
+        task_id_fallback_by_month: dict[str, dict[str, str]] = {}
         for ym in months:
             try:
                 tasks = await client.list_jobtime_tasks(year_month=ym)
@@ -1542,16 +1554,32 @@ def register_routes(app: FastAPI) -> None:
                     f"list_jobtime_tasks({ym}): {exc}",
                 )
                 raise HTTPException(500, f"task 목록 조회 실패: {exc}") from exc
-            task_id_by_month[ym] = {t["name"]: t["task_id"] for t in tasks}
+            paired: dict[tuple[str, str], str] = {}
+            fallback: dict[str, str] = {}
+            for t in tasks:
+                name = t["name"]
+                wt = (t.get("work_type") or "").strip()
+                paired[(name, wt)] = t["task_id"]
+                # name 만으로 매칭하는 fallback — 마지막에 본 것이 winning
+                # (project.work_type 비어 있는 기존 등록 데이터 호환)
+                fallback[name] = t["task_id"]
+            task_id_by_month[ym] = paired
+            task_id_fallback_by_month[ym] = fallback
 
         # save 페이로드 빌드 (task 미등록 항목은 분류)
         save_rows: list[dict] = []
         unregistered: list[str] = []
         for e in ready:
             ym = e["date"][:7]
-            tid = task_id_by_month.get(ym, {}).get(e["task_name"])
+            wt = (e.get("task_work_type") or "").strip()
+            paired = task_id_by_month.get(ym, {})
+            tid = paired.get((e["task_name"], wt))
+            if not tid and not wt:
+                # project 에 work_type 미지정 (기존 등록) — name-only fallback
+                tid = task_id_fallback_by_month.get(ym, {}).get(e["task_name"])
             if not tid:
-                unregistered.append(e["task_name"])
+                label = f"{e['task_name']} [{wt}]" if wt else e["task_name"]
+                unregistered.append(label)
                 continue
             save_rows.append({
                 "task_id": tid,
@@ -1613,12 +1641,23 @@ def register_routes(app: FastAPI) -> None:
         except Exception as exc:
             raise HTTPException(500, f"task 목록 조회 실패: {exc}") from exc
 
-        by_name = {t["name"]: t["task_id"] for t in tasks}
-        task_id = by_name.get(payload.task_name)
+        # (name, work_type) 우선 매칭, work_type 비면 name-only fallback (호환)
+        wt = (payload.task_work_type or "").strip()
+        paired: dict[tuple[str, str], str] = {
+            (t["name"], (t.get("work_type") or "").strip()): t["task_id"]
+            for t in tasks
+        }
+        fallback: dict[str, str] = {t["name"]: t["task_id"] for t in tasks}
+        task_id = paired.get((payload.task_name, wt))
+        if not task_id and not wt:
+            task_id = fallback.get(payload.task_name)
         if not task_id:
+            label = (
+                f"{payload.task_name} [{wt}]" if wt else payload.task_name
+            )
             raise HTTPException(
                 400,
-                f"task '{payload.task_name}' 가 회사 시스템에 등록되어 있지 않습니다.",
+                f"task '{label}' 가 회사 시스템에 등록되어 있지 않습니다.",
             )
 
         rows = [{
@@ -1637,8 +1676,11 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(500, str(exc)) from exc
 
         action_label = "delete" if payload.hours == 0 else "push"
+        log_label = (
+            f"{payload.task_name} [{wt}]" if wt else payload.task_name
+        )
         db_module.log_action(
             conn, "timesheet", payload.date, "ok",
-            f"{action_label} {payload.task_name} = {payload.hours}h",
+            f"{action_label} {log_label} = {payload.hours}h",
         )
         return {"ok": True}

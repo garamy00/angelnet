@@ -136,6 +136,45 @@ async def test_list_jobtime_tasks_filters_subtotal_rows(
 
 
 @respx.mock
+async def test_fetch_jobtime_grid_detailed_auto_detects_text_columns(
+    client: TimesheetClient,
+) -> None:
+    """텍스트 컬럼이 1~3개 가변이어도 첫 숫자 셀까지 자동 감지해 메타로 모은다."""
+    respx.post(JOBTIME_SEARCH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    # 2-column row (이전 형식): name + work_type
+                    {"id": "11113", "data": ["OAM 개선", "개발",
+                                              "8", "0", "0", "8"]},
+                    # 3-column row (사용자 케이스): root + dept + leaf
+                    {"id": "11114", "data": ["행정, 공통개발업무",
+                                              "행정, 공통 개발",
+                                              "세미나",
+                                              "0", "2", "0", "2"]},
+                    # 1-column row (단순 task)
+                    {"id": "11115", "data": ["단순 task", "4", "4"]},
+                ],
+            },
+        )
+    )
+    rows = await client.fetch_jobtime_grid_detailed(year_month="2026-05")
+    await client.close()
+
+    by_root = {r["task_name"]: r for r in rows}
+    # 2-column: label = 'OAM 개선 [개발]'
+    assert by_root["OAM 개선"]["label"] == "OAM 개선 [개발]"
+    assert by_root["OAM 개선"]["work_type"] == "개발"
+    # 3-column: label 의 work_type 자리에 leaf(세미나) 가 들어감 (dept 가 아님)
+    assert by_root["행정, 공통개발업무"]["label"] == "행정, 공통개발업무 [세미나]"
+    assert by_root["행정, 공통개발업무"]["work_type"] == "세미나"
+    # 1-column: brackets 없음
+    assert by_root["단순 task"]["label"] == "단순 task"
+    assert by_root["단순 task"]["work_type"] == ""
+
+
+@respx.mock
 async def test_submit_jobtimes_sends_form_encoded_rows(
     client: TimesheetClient,
 ) -> None:
