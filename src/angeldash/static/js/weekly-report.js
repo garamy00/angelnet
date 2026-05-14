@@ -265,12 +265,15 @@ const esc = (s) => (s || '').replace(/[&<>]/g, (c) => ESC_MAP[c]);
 
 // 셀 안의 줄바꿈/들여쓰기 보존 — Outlook 일부 버전이 white-space:pre-wrap 을
 // 무시하므로 \n → <br>, 줄 시작 spaces → &nbsp; 로 명시적 변환.
+// 추가: '*) ' 로 시작하는 카테고리 헤더 라인은 <strong> 으로 강조.
 function escPreserveWhitespace(s) {
   if (!s) return '';
   return s.split('\n').map((line) => {
     const stripped = line.replace(/^ +/, '');
     const indent = line.length - stripped.length;
-    return '&nbsp;'.repeat(indent) + esc(stripped);
+    let escaped = esc(stripped);
+    if (stripped.startsWith('*)')) escaped = `<strong>${escaped}</strong>`;
+    return '&nbsp;'.repeat(indent) + escaped;
   }).join('<br>');
 }
 
@@ -303,7 +306,22 @@ function buildHtmlTable(rows) {
 }
 
 function buildMarkdownTable(rows) {
-  const cell = (s) => (s || '').replace(/\|/g, '\\|').replace(/\n/g, '<br>');
+  // '*) ' 로 시작하는 카테고리 헤더 라인을 markdown `**\*)...**` 로 감쌈.
+  // `*` 를 escape 해서 `**` + `*` 충돌 방지.
+  const boldHeader = (line) => {
+    const stripped = line.replace(/^ +/, '');
+    if (!stripped.startsWith('*)')) return line;
+    const indent = line.slice(0, line.length - stripped.length);
+    const body = '\\*' + stripped.slice(1);
+    return `${indent}**${body}**`;
+  };
+  const cell = (s) => {
+    if (!s) return '';
+    return s.split('\n')
+      .map(boldHeader)
+      .map((ln) => ln.replace(/\|/g, '\\|'))
+      .join('<br>');
+  };
   const lines = [];
   lines.push('| ' + COL_HEADERS.join(' | ') + ' |');
   lines.push('| ' + COL_HEADERS.map(() => '---').join(' | ') + ' |');

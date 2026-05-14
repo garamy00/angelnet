@@ -713,12 +713,65 @@ a:hover { filter: brightness(1.2); }
   gap: 8px;
 }
 
-/* ─── settings 페이지 폼 유틸리티 ─────────────────── */
-.form-grid-2 {
+/* ─── settings 페이지 폼 ──────────────────────────── */
+/* scope 를 .settings-form 으로 제한 — 다른 페이지의 inline label 패턴 보호 */
+.settings-form label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+.settings-form label > input[type="text"],
+.settings-form label > input[type="number"],
+.settings-form label > input[type="password"],
+.settings-form label > textarea,
+.settings-form label > select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+/* checkbox 줄은 inline 으로 — '활성화' 같은 토글에 적합 */
+.settings-form label.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin: 12px 0 4px;
+}
+.settings-form label.inline-check input[type="checkbox"] {
+  margin: 0;
+  width: auto;
+  display: inline-block;
+}
+/* 2 컬럼 그리드 안의 label 도 위 base 규칙을 그대로 따름 */
+.settings-form .form-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+.settings-form .form-grid-2 > label {
+  margin: 12px 0 0;
+}
+.settings-form .form-grid-2 > label:first-child,
+.settings-form .form-grid-2 > label:nth-child(2) {
+  margin-top: 0;
+}
+/* 짧은 inline label 들이 grid 안에서 같은 base-line 으로 정렬되도록 */
+.settings-form .actions-bar {
+  position: static;
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+  margin-top: 4px;
+  align-items: center;
+}
+.settings-form p.muted {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 일반 form 유틸리티 (settings 외에도 사용 가능) */
 .inline-check {
   display: inline-flex;
   align-items: center;

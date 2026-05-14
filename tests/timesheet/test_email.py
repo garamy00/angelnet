@@ -99,12 +99,41 @@ def test_render_html_table_preserves_newlines_and_indent() -> None:
         "note": "",
     }]
     html = weekly_table.render_html_table(rows)
-    # 줄바꿈이 <br> 로
-    assert "*) EM 고도화<br>" in html
+    # 헤더 라인 bold 처리 + 그 다음에 <br>
+    assert "<strong>*) EM 고도화</strong><br>" in html
     # 2-space 들여쓰기가 &nbsp;&nbsp; 로
     assert "&nbsp;&nbsp;- 신규 OAM" in html
     # 4-space 들여쓰기가 &nbsp;×4 로
     assert "&nbsp;&nbsp;&nbsp;&nbsp;. 코어 인프라 구현" in html
+
+
+def test_render_html_table_bolds_category_headers() -> None:
+    """'*) ' 로 시작하는 카테고리 헤더 라인은 <strong> 으로 강조."""
+    rows = [{
+        "project_name": "P1",
+        "last_week": "",
+        "this_week": "*) EM 고도화\n  - 신규 OAM 서버",
+        "next_week": "", "note": "",
+    }]
+    html = weekly_table.render_html_table(rows)
+    assert "<strong>*) EM 고도화</strong>" in html
+    # bold 가 아닌 본문 라인은 strong 으로 감싸지지 않음
+    assert "<strong>  - 신규" not in html
+    assert "<strong>&nbsp;&nbsp;- 신규" not in html
+
+
+def test_render_markdown_table_bolds_category_headers() -> None:
+    """markdown 표에서도 '*) ' 헤더 라인은 `**\\*)...**` 로 (`*` escape 포함)."""
+    rows = [{
+        "project_name": "P1",
+        "last_week": "",
+        "this_week": "*) EM 고도화\n  - 신규 OAM 서버",
+        "next_week": "", "note": "",
+    }]
+    md = weekly_table.render_markdown_table(rows)
+    assert r"**\*) EM 고도화**" in md
+    # 본문 라인은 escape/감싸기 영향 없음
+    assert "- 신규 OAM 서버" in md
 
 
 def test_render_html_table_escapes_html_chars_in_cells() -> None:

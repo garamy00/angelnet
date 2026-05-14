@@ -476,8 +476,8 @@ def _esc_basic(s: str) -> str:
 def _esc_preserve_whitespace(s: str) -> str:
     """셀 내부 escape + 줄바꿈을 <br>, 줄 시작 spaces 를 &nbsp; 로.
 
+    추가: '*) ' 로 시작하는 카테고리 헤더 라인은 <strong> 으로 감싸 강조.
     Outlook 일부 버전이 white-space:pre-wrap 을 무시하므로 명시적으로 변환.
-    줄 중간의 연속 space 는 그대로 둔다 (브라우저가 1개로 합쳐도 가독성 영향 적음).
     """
     if not s:
         return ""
@@ -485,7 +485,10 @@ def _esc_preserve_whitespace(s: str) -> str:
     for line in s.split("\n"):
         stripped = line.lstrip(" ")
         indent = len(line) - len(stripped)
-        out_lines.append("&nbsp;" * indent + _esc_basic(stripped))
+        escaped = _esc_basic(stripped)
+        if stripped.startswith("*)"):
+            escaped = f"<strong>{escaped}</strong>"
+        out_lines.append("&nbsp;" * indent + escaped)
     return "<br>".join(out_lines)
 
 
@@ -590,10 +593,24 @@ def render_markdown_table(rows: list[dict]) -> str:
     """마크다운 표 (UpNote 본문 + plain 폴백).
 
     셀 내부 줄바꿈은 `<br>` 로 치환하여 단일 셀 안에 멀티라인 유지.
-    pipe 문자는 escape.
+    pipe 문자는 escape. '*) ' 로 시작하는 카테고리 헤더는 `**...**` 로 강조.
     """
+    def _bold_headers(line: str) -> str:
+        # '*) ' 로 시작하는 헤더 라인을 `**\*)...**` 로 감쌈.
+        # 첫 '*' 를 escape (`\*`) 해서 `**`+`*` 충돌 회피.
+        stripped = line.lstrip(" ")
+        if stripped.startswith("*)"):
+            indent = line[: len(line) - len(stripped)]
+            body = "\\*" + stripped[1:]  # 첫 '*' 만 escape, '" + ) + 나머지" 는 그대로
+            return f"{indent}**{body}**"
+        return line
+
     def _cell(s: str) -> str:
-        return (s or "").replace("|", "\\|").replace("\n", "<br>")
+        if not s:
+            return ""
+        # 줄별로 헤더 처리 후 pipe escape, <br> join
+        lines = [_bold_headers(ln) for ln in s.split("\n")]
+        return "<br>".join(ln.replace("|", "\\|") for ln in lines)
 
     out: list[str] = []
     out.append("| " + " | ".join(_COL_HEADERS) + " |")
