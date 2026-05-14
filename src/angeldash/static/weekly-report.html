@@ -33,9 +33,27 @@
       <button id="this-week">이번 주</button>
       <button id="next-week">다음 주 ▶</button>
       <span class="spacer"></span>
-      <button id="btn-copy-html" title="HTML 표로 클립보드 복사 (Outlook 친화)">📋 HTML 표 복사</button>
-      <button id="btn-upnote-weekly" class="primary" title="UpNote 의 주간업무보고 노트북에 저장">📤 UpNote 저장</button>
+      <button id="btn-preview-email" title="이메일 본문 미리보기">📧 이메일 미리보기</button>
+      <button id="btn-preview-upnote" title="UpNote 노트 미리보기">📝 UpNote 미리보기</button>
+      <button id="btn-send-email" class="primary"
+              title="기본 메일 클라이언트를 열어 보내기 (Outlook)">✉️ 이메일 보내기</button>
+      <button id="btn-upnote-weekly" title="UpNote 의 주간업무보고 노트북에 저장">📤 UpNote 저장</button>
     </section>
+
+    <!-- 미리보기 모달 — JS 가 텍스트 채우고 hidden 토글 -->
+    <div id="preview-modal" class="modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel">
+        <div class="modal-header">
+          <strong id="preview-modal-title">미리보기</strong>
+          <button id="preview-modal-close" class="modal-close" title="닫기">×</button>
+        </div>
+        <div id="preview-modal-body" class="modal-body"></div>
+        <div class="modal-actions">
+          <button id="preview-modal-copy" class="primary">📋 클립보드에 복사</button>
+        </div>
+      </div>
+    </div>
 
     <section id="weekly-empty" hidden>
       <p class="muted">이 주의 보고서가 아직 없습니다.</p>

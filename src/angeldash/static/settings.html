@@ -97,6 +97,83 @@
         주간업무보고 표의 자동 휴가 행에 들어갈 이름. 직급을 포함해도 됩니다.
         비워두면 회사 시스템 로그인 이름이 그대로 사용됩니다.
       </p>
+
+      <h3>이메일 (SMTP)</h3>
+
+      <label class="inline-check">
+        <input id="email-enabled" type="checkbox">
+        <span>SMTP 발송 활성화</span>
+      </label>
+
+      <div class="form-grid-2">
+        <label>SMTP Host
+          <input id="email-smtp-host" type="text" placeholder="smtp.office365.com">
+        </label>
+        <label>Port
+          <input id="email-smtp-port" type="number" min="1" max="65535"
+                 placeholder="587">
+        </label>
+      </div>
+
+      <label class="inline-check">
+        <input id="email-smtp-tls" type="checkbox">
+        <span>STARTTLS (587 권장 / 465 면 끄기)</span>
+      </label>
+
+      <div class="form-grid-2">
+        <label>Username (인증)
+          <input id="email-username" type="text" placeholder="dgson@uangel.com">
+        </label>
+        <label>Password
+          <input id="email-password" type="password" autocomplete="new-password"
+                 placeholder="********">
+        </label>
+      </div>
+      <p class="muted">
+        Password 는 macOS Keychain (service=angeldash-email) 에 저장됩니다.
+        DB/git/백업에는 저장되지 않습니다.
+        <span id="email-password-status" class="small"></span>
+      </p>
+
+      <div class="form-grid-2">
+        <label>From Address
+          <input id="email-from" type="text" placeholder="dgson@uangel.com">
+        </label>
+        <label>받는사람 (To, 콤마 구분)
+          <input id="email-to" type="text" placeholder="manager@uangel.com">
+        </label>
+      </div>
+
+      <label>참조 (Cc, 콤마 구분)
+        <input id="email-cc" type="text" placeholder="team@uangel.com">
+      </label>
+
+      <div class="actions-bar">
+        <button id="email-test" type="button">📡 SMTP Test</button>
+        <span id="email-test-result" class="muted small"></span>
+      </div>
+
+      <label>제목 템플릿
+        <input id="email-subject" type="text"
+               placeholder="주간업무보고 ({{ yy }}년 {{ ww }}주차)">
+      </label>
+      <label>본문 — 표 위 인사말
+        <textarea id="email-greeting" rows="3"
+                  placeholder="안녕하세요 손대곤입니다.&#10;&#10;이번주 주간 업무 보고 드립니다."></textarea>
+      </label>
+      <label>본문 — 표 아래 마무리
+        <textarea id="email-closing" rows="2"
+                  placeholder="그럼…수고하십시오&#10;고맙습니다."></textarea>
+      </label>
+      <label>서명 (HTML, Outlook 서명을 복사해서 붙여넣기)
+        <textarea id="email-signature" rows="4"
+                  placeholder="<p>손대곤 / OAM 팀<br>uangel</p>"></textarea>
+      </label>
+      <p class="muted">
+        직접 SMTP 발송이라 Outlook 의 자동 서명은 적용되지 않습니다.
+        Outlook 서명 영역을 HTML 로 복사해서 위 textarea 에 한 번 입력해두면
+        본문 끝(마무리 다음)에 자동 첨부됩니다.
+      </p>
     </section>
 
     <section class="actions-bar">

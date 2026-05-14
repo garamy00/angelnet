@@ -21,7 +21,8 @@ from . import db
 
 _FALLBACK_PROJECT = "(매핑 없음)"
 # 자동 생성되는 휴가 행의 프로젝트명. UI/재생성 로직이 이 이름으로 행을 식별한다.
-VACATION_PROJECT_NAME = "휴가"
+# 프로젝트 컬럼 표시는 '기타' 지만 셀 본문 prefix 는 '*) 휴가' 로 유지.
+VACATION_PROJECT_NAME = "기타"
 
 # 회사 시스템 휴가 type 코드 → 사용자 표시 라벨
 _VAC_TYPE_DISPLAY_LABEL = {
@@ -504,6 +505,79 @@ def render_html_table(rows: list[dict]) -> str:
         lines.append("</tr>")
     lines.append("</tbody></table>")
     return "".join(lines)
+
+
+def _html_escape(s: str) -> str:
+    return (
+        (s or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _plain_to_html_paragraphs(text: str) -> str:
+    """plain text 를 HTML 로 — 빈 줄은 단락 구분, 일반 줄바꿈은 <br>."""
+    if not text:
+        return ""
+    paragraphs = text.split("\n\n")
+    out: list[str] = []
+    for p in paragraphs:
+        if not p.strip():
+            continue
+        out.append(
+            "<p>"
+            + _html_escape(p).replace("\n", "<br>")
+            + "</p>"
+        )
+    return "".join(out)
+
+
+def render_email_html(
+    rows: list[dict],
+    *,
+    greeting: str,
+    closing: str,
+    signature_html: str,
+) -> str:
+    """이메일 HTML 본문 — 인사말 / 표 / 마무리 / 서명 순.
+
+    greeting / closing 은 plain text (사용자가 textarea 입력),
+    signature_html 은 raw HTML (Outlook 서명 복사한 그대로). 비면 생략.
+    """
+    parts: list[str] = []
+    parts.append(
+        "<div style=\"font-family: '맑은 고딕', sans-serif; font-size:13px;\">"
+    )
+    if greeting:
+        parts.append(_plain_to_html_paragraphs(greeting))
+    parts.append(render_html_table(rows))
+    if closing:
+        parts.append(_plain_to_html_paragraphs(closing))
+    if signature_html and signature_html.strip():
+        # 서명은 사용자가 입력한 HTML 그대로. 위 본문과 분리되도록 <br> 추가.
+        parts.append("<br>" + signature_html)
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def render_email_plain(
+    rows: list[dict],
+    *,
+    greeting: str,
+    closing: str,
+) -> str:
+    """이메일 plain text 본문 — HTML 미지원 클라이언트 fallback.
+
+    인사말 + 마크다운 표 + 마무리. 서명은 plain 본문에는 미첨부 (HTML 전용).
+    """
+    chunks: list[str] = []
+    if greeting:
+        chunks.append(greeting.rstrip())
+    chunks.append(render_markdown_table(rows))
+    if closing:
+        chunks.append(closing.rstrip())
+    return "\n\n".join(chunks)
 
 
 def render_markdown_table(rows: list[dict]) -> str:

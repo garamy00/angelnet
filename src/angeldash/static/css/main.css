@@ -652,3 +652,110 @@ a:hover { filter: brightness(1.2); }
   margin-top: 24px;
   text-align: center;
 }
+
+/* ─── 미리보기 모달 ─────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal[hidden] { display: none; }
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  width: min(900px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 6px;
+}
+.modal-close:hover { color: var(--color-text); }
+.modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  background: #fff;
+  color: #111;
+  font-size: 13px;
+}
+.modal-actions {
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ─── settings 페이지 폼 유틸리티 ─────────────────── */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.inline-check input[type="checkbox"] {
+  margin: 0;
+}
+.small {
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+/* ─── weekly report 행 ▲▼ 액션 ─────────────────── */
+.weekly-table .row-actions {
+  white-space: nowrap;
+}
+.weekly-table .row-move {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin-right: 2px;
+}
+.weekly-table .row-move:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+.weekly-table .row-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.weekly-table .row-vacation .cell-project {
+  color: var(--color-muted);
+  font-style: italic;
+}

@@ -48,6 +48,26 @@ class SettingsPreviewInput(BaseModel):
     week_iso: str | None = None
 
 
+class EmailPasswordInput(BaseModel):
+    """PUT /api/settings/email-password 페이로드.
+
+    빈 문자열이면 Keychain 항목 삭제 의도로 해석.
+    """
+
+    password: str
+
+
+class EmailSendWeeklyInput(BaseModel):
+    """POST /api/actions/email-send-weekly 페이로드.
+
+    override_to / override_cc 가 주어지면 설정값 대신 사용 (받는사람 확인 시 수정 가능).
+    """
+
+    week_iso: str
+    override_to: str | None = None
+    override_cc: str | None = None
+
+
 class TeamReportActionInput(BaseModel):
     """POST /api/actions/team-report 페이로드."""
 
@@ -873,6 +893,183 @@ def register_routes(app: FastAPI) -> None:
         )
         return {"title": title, "text": text, "opened": True}
 
+    # ─── Email SMTP API ────────────────────────────────
+    # password 는 Keychain (service="angeldash-email", account=email.username) 에 저장.
+    # settings 테이블에는 평문 password 를 두지 않는다.
+    from .._common.auth import KeychainStore
+
+    EMAIL_KEYCHAIN_SERVICE = "angeldash-email"
+
+    def _email_keychain(username: str) -> KeychainStore:
+        # username 이 비어있으면 의미 있는 항목이 아니므로 caller 가 가드.
+        return KeychainStore(account=username, service=EMAIL_KEYCHAIN_SERVICE)
+
+    def _load_smtp_config(conn) -> tuple[object, str, str]:
+        """settings + Keychain 에서 SMTP 파라미터 로드. 부족하면 HTTPException(400).
+
+        Returns: (SmtpConfig, from_addr, signature_html).
+        """
+        from fastapi import HTTPException
+
+        from . import email_smtp as smtp_module
+
+        enabled = (
+            db_module.get_setting(conn, "email.enabled") or "false"
+        ).lower()
+        if enabled != "true":
+            raise HTTPException(
+                400, "이메일 발송이 비활성화되어 있습니다 (설정에서 활성화)",
+            )
+
+        host = (db_module.get_setting(conn, "email.smtp_host") or "").strip()
+        port_raw = (db_module.get_setting(conn, "email.smtp_port") or "0").strip()
+        tls = (
+            db_module.get_setting(conn, "email.smtp_tls") or "true"
+        ).lower() == "true"
+        username = (db_module.get_setting(conn, "email.username") or "").strip()
+        from_addr = (db_module.get_setting(conn, "email.from") or username).strip()
+        signature_html = db_module.get_setting(conn, "email.signature_html") or ""
+
+        if not host or not username:
+            raise HTTPException(400, "SMTP host/username 이 설정되지 않았습니다")
+        try:
+            port = int(port_raw)
+        except ValueError as exc:
+            raise HTTPException(
+                400, f"SMTP port 가 숫자가 아닙니다: {port_raw}",
+            ) from exc
+
+        password = _email_keychain(username).get()
+        if not password:
+            raise HTTPException(
+                400, "SMTP password 가 Keychain 에 저장되지 않았습니다",
+            )
+
+        return (
+            smtp_module.SmtpConfig(
+                host=host, port=port, use_tls=tls,
+                username=username, password=password,
+            ),
+            from_addr,
+            signature_html,
+        )
+
+    @app.put("/api/settings/email-password")
+    async def put_email_password_route(
+        payload: EmailPasswordInput, conn=Depends(get_conn),
+    ) -> dict:
+        """SMTP password 를 Keychain 에 저장. account = email.username 설정값."""
+        from fastapi import HTTPException
+
+        username = (db_module.get_setting(conn, "email.username") or "").strip()
+        if not username:
+            raise HTTPException(
+                400, "먼저 email.username 을 설정 후 password 를 등록하세요",
+            )
+        try:
+            _email_keychain(username).save(payload.password)
+        except RuntimeError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/api/settings/email-password-status")
+    async def get_email_password_status_route(conn=Depends(get_conn)) -> dict:
+        """저장 여부만 반환 (값은 절대 응답에 넣지 않는다)."""
+        username = (db_module.get_setting(conn, "email.username") or "").strip()
+        if not username:
+            return {"has_password": False, "username": ""}
+        present = _email_keychain(username).get() is not None
+        return {"has_password": present, "username": username}
+
+    @app.post("/api/actions/email-test")
+    async def action_email_test_route(conn=Depends(get_conn)) -> dict:
+        """SMTP 연결 + 인증만 검증. 실제 발송 없음."""
+        from fastapi import HTTPException
+
+        from . import email_smtp as smtp_module
+
+        cfg, _from_addr, _sig = _load_smtp_config(conn)
+        try:
+            smtp_module.verify_connection(cfg)
+        except smtp_module.SmtpError as exc:
+            db_module.log_action(conn, "email_test", "", "fail", str(exc))
+            raise HTTPException(400, str(exc)) from exc
+        db_module.log_action(conn, "email_test", "", "ok", f"host={cfg.host}")
+        return {"ok": True}
+
+    @app.post("/api/actions/email-send-weekly")
+    async def action_email_send_weekly_route(
+        payload: EmailSendWeeklyInput, conn=Depends(get_conn),
+    ) -> dict:
+        """주간업무보고를 이메일로 발송. 받는사람은 override 가능."""
+        from fastapi import HTTPException
+
+        from . import email_smtp as smtp_module
+
+        cfg, from_addr, signature_html = _load_smtp_config(conn)
+
+        # 받는사람 결정: override 가 있으면 우선, 없으면 설정값
+        to_raw = (
+            payload.override_to
+            if payload.override_to is not None
+            else db_module.get_setting(conn, "email.to") or ""
+        )
+        cc_raw = (
+            payload.override_cc
+            if payload.override_cc is not None
+            else db_module.get_setting(conn, "email.cc") or ""
+        )
+        to_list, cc_list = smtp_module.parse_recipients(to_raw, cc_raw)
+        if not to_list:
+            raise HTTPException(400, "받는사람(To) 이 비어있습니다")
+
+        # 본문 빌드: subject 는 템플릿, body 는 인사말 + 표 + 마무리 + 서명
+        wr = db_module.get_weekly_report(conn, payload.week_iso)
+        rows = wr.get("rows") or []
+        if not rows:
+            raise HTTPException(400, "이 주의 보고서가 비어있습니다")
+
+        subject_tmpl = (
+            db_module.get_setting(conn, "email.subject_template")
+            or SETTING_DEFAULTS["email.subject_template"]
+        )
+        ctx = fmt_module._week_globals(payload.week_iso)
+        try:
+            subject = fmt_module.render_upnote_title(subject_tmpl, ctx)
+        except fmt_module.TemplateSyntaxError as exc:
+            raise HTTPException(400, f"제목 템플릿 오류: {exc.message}") from exc
+
+        greeting = db_module.get_setting(conn, "email.greeting") or ""
+        closing = db_module.get_setting(conn, "email.closing") or ""
+
+        html_body = weekly_module.render_email_html(
+            rows, greeting=greeting, closing=closing,
+            signature_html=signature_html,
+        )
+        plain_body = weekly_module.render_email_plain(
+            rows, greeting=greeting, closing=closing,
+        )
+
+        spec = smtp_module.EmailMessageSpec(
+            from_addr=from_addr,
+            to=to_list, cc=cc_list,
+            subject=subject,
+            html_body=html_body, plain_body=plain_body,
+        )
+        try:
+            smtp_module.send_email(cfg, spec)
+        except smtp_module.SmtpError as exc:
+            db_module.log_action(
+                conn, "email_send_weekly", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(500, str(exc)) from exc
+
+        db_module.log_action(
+            conn, "email_send_weekly", payload.week_iso, "ok",
+            f"to={','.join(to_list)} subject={subject}",
+        )
+        return {"ok": True, "subject": subject, "to": to_list, "cc": cc_list}
+
     # ─── Settings + Logs API ────────────────────────────
 
     SETTING_DEFAULTS: dict[str, str] = {
@@ -890,6 +1087,31 @@ def register_routes(app: FastAPI) -> None:
         "upnote.weekly_notebook_id": "",
         # 주간업무보고 휴가 행 표시명 (직급 포함 가능). 비면 client.user.name fallback.
         "report.author_name": "",
+        # 주간업무보고 이메일 본문 — 표 위에 들어가는 인사말 (plain text, 여러 줄 가능)
+        "email.greeting": "",
+        # 주간업무보고 이메일 본문 — 표 아래 마무리 (plain text, 여러 줄)
+        "email.closing": "",
+        # 주간업무보고 이메일 받는사람 (콤마 구분, 여러 명 가능)
+        "email.to": "",
+        # 주간업무보고 이메일 참조 (콤마 구분)
+        "email.cc": "",
+        # 주간업무보고 이메일 제목 (Jinja2, upnote 제목과 동일 변수 — yy, ww 등)
+        "email.subject_template": "주간업무보고 ({{ yy }}년 {{ ww }}주차)",
+        # SMTP 발송 활성화 (true/false). 비활성이면 이메일 액션이 모두 차단.
+        "email.enabled": "false",
+        # SMTP 서버 주소 (예: smtp.office365.com)
+        "email.smtp_host": "smtp.office365.com",
+        # SMTP 포트 (587 = STARTTLS, 465 = SMTPS)
+        "email.smtp_port": "587",
+        # STARTTLS 사용 여부 (587 일 때 true, 465 일 때 false 권장)
+        "email.smtp_tls": "true",
+        # SMTP 인증 username (보통 보내는 메일 주소)
+        "email.username": "",
+        # 보내는사람 (From) — username 과 다를 수 있어 분리
+        "email.from": "",
+        # 이메일 서명 (HTML). SMTP 직접 발송이라 Outlook 의 자동 서명은 안 붙으므로
+        # 사용자가 직접 입력. HTML body 끝(마무리 다음)에 추가. 비면 미첨부.
+        "email.signature_html": "",
     }
 
     @app.get("/api/settings")

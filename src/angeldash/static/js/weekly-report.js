@@ -4,7 +4,8 @@ import { initOngoingSchedule } from './ongoing_schedule.js';
 const COL_KEYS = ['last_week', 'this_week', 'next_week', 'note'];
 const COL_HEADERS = ['프로젝트', '지난주 한 일', '이번주 한 일/할 일', '다음주 할 일', '비고'];
 // 자동 생성되는 휴가 행. 사용자가 직접 옮기거나 영구 삭제할 수 없게 ▲▼/🗑 숨김.
-const VACATION_PROJECT_NAME = '휴가';
+// 프로젝트 컬럼 표시는 '기타' (셀 본문 prefix 는 '*) 휴가' 로 별개).
+const VACATION_PROJECT_NAME = '기타';
 
 function isVacationRow(row) {
   return !!row && row.project_name === VACATION_PROJECT_NAME;
@@ -12,15 +13,27 @@ function isVacationRow(row) {
 
 let currentWeek = new URLSearchParams(location.search).get('week') || isoWeek(new Date());
 let currentRows = [];
-let weeklyNotebookId = '';
+// 설정 캐시 — 이메일/UpNote 액션 시 사용
+const cachedSettings = {
+  weeklyNotebookId: '',
+  emailTo: '',
+  emailCc: '',
+  emailSubjectTemplate: '',
+  emailGreeting: '',
+  emailClosing: '',
+};
 
-async function loadWeeklyNotebookId() {
+async function loadCachedSettings() {
   try {
-    const settings = await apiGet('/api/settings');
-    weeklyNotebookId = (settings['upnote.weekly_notebook_id'] || '').trim();
+    const s = await apiGet('/api/settings');
+    cachedSettings.weeklyNotebookId = (s['upnote.weekly_notebook_id'] || '').trim();
+    cachedSettings.emailTo = (s['email.to'] || '').trim();
+    cachedSettings.emailCc = (s['email.cc'] || '').trim();
+    cachedSettings.emailSubjectTemplate = s['email.subject_template'] || '';
+    cachedSettings.emailGreeting = s['email.greeting'] || '';
+    cachedSettings.emailClosing = s['email.closing'] || '';
   } catch (e) {
-    // 설정 로드 실패 — 비어있는 상태로 두고 버튼 동작 시 안내
-    weeklyNotebookId = '';
+    // 설정 로드 실패 — 캐시는 빈 채로 유지. 액션 시 toast 로 안내.
   }
 }
 
@@ -245,7 +258,7 @@ document.getElementById('next-week').addEventListener('click', () => {
   loadWeek();
 });
 
-// ─── HTML 표 복사 ────────────────────────────────
+// ─── 본문 빌더 (HTML / 마크다운 / 이메일 전체) ────
 
 function buildHtmlTable(rows) {
   const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
@@ -289,28 +302,151 @@ function buildMarkdownTable(rows) {
   return lines.join('\n');
 }
 
-document.getElementById('btn-copy-html').addEventListener('click', async () => {
-  if (currentRows.length === 0) {
-    toast('복사할 보고서가 없습니다');
-    return;
+// ─── 이메일 본문 빌더 (client-side 미리보기용) ─────
+// 서버 발송 시는 서버가 weekly_table.render_email_* 로 동일 형식을 빌드.
+
+function plainToHtmlParagraphs(text) {
+  if (!text) return '';
+  const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+  const esc = (s) => s.replace(/[&<>]/g, (c) => escMap[c]);
+  return text.split('\n\n')
+    .filter((p) => p.trim())
+    .map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>')
+    .join('');
+}
+
+function buildEmailHtml(rows, greeting, closing, signatureHtml) {
+  const parts = [];
+  parts.push("<div style=\"font-family: '맑은 고딕', sans-serif; font-size:13px;\">");
+  if (greeting) parts.push(plainToHtmlParagraphs(greeting));
+  parts.push(buildHtmlTable(rows));
+  if (closing) parts.push(plainToHtmlParagraphs(closing));
+  if (signatureHtml && signatureHtml.trim()) {
+    parts.push('<br>' + signatureHtml);
   }
-  const html = buildHtmlTable(currentRows);
-  const plain = buildMarkdownTable(currentRows);
-  try {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([plain], { type: 'text/plain' }),
-      }),
-    ]);
-    toast('주간업무보고 HTML 표 복사됨');
-  } catch (e) {
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function buildEmailPlain(rows, greeting, closing) {
+  const chunks = [];
+  if (greeting) chunks.push(greeting.replace(/\s+$/, ''));
+  chunks.push(buildMarkdownTable(rows));
+  if (closing) chunks.push(closing.replace(/\s+$/, ''));
+  return chunks.join('\n\n');
+}
+
+// ─── 미리보기 모달 ───────────────────────────────
+
+function openPreviewModal({ title, htmlForPreview, htmlForCopy, plainForCopy }) {
+  const modal = document.getElementById('preview-modal');
+  document.getElementById('preview-modal-title').textContent = title;
+  // 미리보기 영역에는 결과 HTML 을 그대로 렌더 (sandbox 효과를 위해 iframe 사용 권장)
+  // 단순화를 위해 직접 innerHTML — 본문은 사용자 본인이 작성한 것이라 XSS 위험 낮음.
+  document.getElementById('preview-modal-body').innerHTML = htmlForPreview;
+  const copyBtn = document.getElementById('preview-modal-copy');
+  // 이전 핸들러 제거를 위해 cloneNode 트릭
+  const newCopy = copyBtn.cloneNode(true);
+  copyBtn.parentNode.replaceChild(newCopy, copyBtn);
+  newCopy.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(plain);
-      toast('HTML 미지원 — 마크다운 표만 복사됨');
-    } catch (err) {
-      toast(`복사 실패: ${err.message}`, 'fail');
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([htmlForCopy], { type: 'text/html' }),
+          'text/plain': new Blob([plainForCopy], { type: 'text/plain' }),
+        }),
+      ]);
+      toast('클립보드에 복사됨');
+    } catch (e) {
+      try {
+        await navigator.clipboard.writeText(plainForCopy);
+        toast('HTML 미지원 — plain 만 복사됨');
+      } catch (err) {
+        toast(`복사 실패: ${err.message}`, 'fail');
+      }
     }
+  });
+  modal.hidden = false;
+}
+
+function closePreviewModal() {
+  document.getElementById('preview-modal').hidden = true;
+}
+
+document.getElementById('preview-modal-close').addEventListener('click', closePreviewModal);
+document.querySelector('#preview-modal .modal-backdrop').addEventListener('click', closePreviewModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('preview-modal').hidden) {
+    closePreviewModal();
+  }
+});
+
+// ─── 미리보기 핸들러 ─────────────────────────────
+
+document.getElementById('btn-preview-email').addEventListener('click', () => {
+  if (currentRows.length === 0) { toast('미리보기 할 보고서가 없습니다'); return; }
+  const html = buildEmailHtml(
+    currentRows,
+    cachedSettings.emailGreeting,
+    cachedSettings.emailClosing,
+    '',  // 미리보기 영역은 서명 raw HTML 을 그대로 보여주지 않음 (이미지 등 깨질 수 있어)
+  );
+  // 복사용에는 서명 포함
+  const htmlForCopy = buildEmailHtml(
+    currentRows,
+    cachedSettings.emailGreeting,
+    cachedSettings.emailClosing,
+    '',
+  );
+  const plainForCopy = buildEmailPlain(
+    currentRows,
+    cachedSettings.emailGreeting,
+    cachedSettings.emailClosing,
+  );
+  openPreviewModal({
+    title: '📧 이메일 미리보기',
+    htmlForPreview: html,
+    htmlForCopy,
+    plainForCopy,
+  });
+});
+
+document.getElementById('btn-preview-upnote').addEventListener('click', () => {
+  if (currentRows.length === 0) { toast('미리보기 할 보고서가 없습니다'); return; }
+  const html = buildHtmlTable(currentRows);
+  const md = buildMarkdownTable(currentRows);
+  openPreviewModal({
+    title: '📝 UpNote 미리보기 (표만 저장)',
+    htmlForPreview: html,
+    htmlForCopy: html,
+    plainForCopy: md,
+  });
+});
+
+// ─── 이메일 보내기 (서버 SMTP) ──────────────────
+
+document.getElementById('btn-send-email').addEventListener('click', async () => {
+  if (currentRows.length === 0) { toast('발송할 보고서가 없습니다'); return; }
+
+  // 받는사람 확인 — 설정값이 default, 사용자가 즉시 수정 가능
+  const defaultTo = cachedSettings.emailTo;
+  const defaultCc = cachedSettings.emailCc;
+  const to = prompt('받는사람 (To, 콤마 구분)', defaultTo);
+  if (to === null) return;  // 취소
+  const cc = prompt('참조 (Cc, 콤마 구분) — 없으면 빈 칸', defaultCc);
+  if (cc === null) return;
+  if (!to.trim()) { toast('받는사람이 비어있습니다', 'fail'); return; }
+  if (!confirm(`정말 발송할까요?\n\nTo: ${to}\nCc: ${cc || '(없음)'}`)) return;
+
+  try {
+    const r = await apiPost('/api/actions/email-send-weekly', {
+      week_iso: currentWeek,
+      override_to: to,
+      override_cc: cc,
+    });
+    toast(`이메일 발송됨 — ${r.subject}`);
+  } catch (e) {
+    toast(`발송 실패: ${e.message}`, 'fail');
   }
 });
 
@@ -321,7 +457,7 @@ document.getElementById('btn-upnote-weekly').addEventListener('click', async () 
     toast('보고서가 비어있습니다');
     return;
   }
-  if (!weeklyNotebookId) {
+  if (!cachedSettings.weeklyNotebookId) {
     toast('주간업무보고 노트북 ID 를 설정 페이지에서 먼저 등록하세요');
     return;
   }
@@ -337,5 +473,5 @@ document.getElementById('btn-upnote-weekly').addEventListener('click', async () 
 // ─── 초기 로드 ───────────────────────────────────
 
 loadWeek();
-loadWeeklyNotebookId();
+loadCachedSettings();
 initOngoingSchedule();
