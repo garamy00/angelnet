@@ -1007,10 +1007,11 @@ def register_routes(app: FastAPI) -> None:
             )
             raise HTTPException(400, str(exc)) from exc
 
-        # 주간업무보고 UpNote 는 표 형식 대신 프로젝트별 섹션 plain text 사용.
-        # 마크다운 표의 셀 안 줄바꿈(<br>)과 강조(**\*)…**)가 사용자의
+        # 주간업무보고 UpNote 는 Unicode 박스 표 (monospace) 로 시각화.
+        # markdown 표의 셀 안 줄바꿈(<br>) / 강조(**\*)…**) 가 사용자의
         # wrap_in_code_block / markdown=false 환경에서 raw 로 노출되는 문제 회피.
-        text = weekly_module.render_weekly_upnote_text(rows)
+        # ASCII 폭 계산으로 한글 셀도 정렬됨 (east_asian_width 기준).
+        text = weekly_module.render_weekly_upnote_table(rows)
         if wrap_in_code:
             text = "```\n" + text + "\n```"
 

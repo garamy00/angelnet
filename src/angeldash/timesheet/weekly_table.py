@@ -589,40 +589,83 @@ def render_email_plain(
     return "\n\n".join(chunks)
 
 
-def render_weekly_upnote_text(rows: list[dict]) -> str:
-    """주간업무보고 UpNote 본문 — 프로젝트별 섹션 plain text.
+def _display_width(text: str) -> int:
+    """monospace 환경에서의 표시 폭. 한글/일본/중국어/이모지는 2, 그 외 1.
 
-    markdown 표 형식은 셀 안 줄바꿈(<br>) 과 강조(**\\*)…**) 가 UpNote 의
-    wrap_in_code_block 안에서 raw 로 노출되어 가독성이 떨어진다. 표를 포기하고
-    프로젝트별 헤더 + 컬럼별 sub-block 으로 풀면 wrap_in_code_block 모드 안에서도
-    mono-font 코드블록 안에 들여쓰기가 그대로 보존되어 자연스럽게 보인다.
+    UpNote 코드블록 같은 monospace 영역에서 컬럼 정렬을 맞추기 위함.
     """
-    sections = (
-        ("지난주 한 일", "last_week"),
-        ("이번주 한 일/할 일", "this_week"),
-        ("다음주 할 일", "next_week"),
-        ("비고", "note"),
+    import unicodedata
+    return sum(
+        2 if unicodedata.east_asian_width(c) in ("F", "W") else 1
+        for c in text
     )
 
-    blocks: list[str] = []
-    for r in rows:
-        name = (r.get("project_name") or "").strip() or "(이름 없음)"
-        lines: list[str] = [f"# {name}", ""]
-        any_section = False
-        for label, key in sections:
-            body = (r.get(key) or "").rstrip()
-            if not body:
-                continue
-            any_section = True
-            lines.append(f"[{label}]")
-            lines.append(body)
-            lines.append("")
-        if not any_section:
-            # 모든 컬럼 비어있는 프로젝트는 헤더만 남기지 않고 skip
-            continue
-        blocks.append("\n".join(lines).rstrip())
 
-    return ("\n" + "=" * 50 + "\n\n").join(blocks)
+def _pad_to_width(text: str, width: int) -> str:
+    """text 를 표시 폭 width 까지 trailing spaces 로 padding."""
+    return text + " " * (width - _display_width(text))
+
+
+def render_weekly_upnote_table(rows: list[dict]) -> str:
+    """주간업무보고 UpNote 본문 — Unicode 박스 표.
+
+    monospace 환경(코드블록) 에서 시각적으로 표 형식을 유지. 셀 안 줄바꿈은
+    같은 행의 다음 라인에 그대로 출력되므로 트리 들여쓰기도 보존된다.
+    한글 폭은 east_asian_width 기준 2 로 계산.
+    """
+    headers = ("프로젝트", "지난주 한 일", "이번주 한 일/할 일", "다음주 할 일", "비고")
+    keys = ("project_name", "last_week", "this_week", "next_week", "note")
+    n_cols = len(headers)
+
+    # 헤더 + 각 행을 [라인 리스트, ...] 로 정규화 (셀 = 라인 리스트)
+    matrix: list[list[list[str]]] = []
+    matrix.append([[h] for h in headers])
+    for r in rows:
+        cells: list[list[str]] = []
+        for k in keys:
+            body = (r.get(k) or "").rstrip("\n")
+            cells.append(body.split("\n") if body else [""])
+        matrix.append(cells)
+
+    # 각 컬럼의 max 표시폭 결정
+    col_widths: list[int] = []
+    for c in range(n_cols):
+        width = 0
+        for row in matrix:
+            for line in row[c]:
+                width = max(width, _display_width(line))
+        col_widths.append(width)
+
+    # 박스 그리기 — 위/중간/아래 separator + 각 셀 라인
+    pad = 1  # 양옆 space
+    border_h = "─"
+    border_v = "│"
+    top = "┌" + "┬".join(border_h * (w + pad * 2) for w in col_widths) + "┐"
+    mid = "├" + "┼".join(border_h * (w + pad * 2) for w in col_widths) + "┤"
+    bot = "└" + "┴".join(border_h * (w + pad * 2) for w in col_widths) + "┘"
+
+    def render_row(cells: list[list[str]]) -> list[str]:
+        height = max(len(cell) for cell in cells)
+        out: list[str] = []
+        for i in range(height):
+            parts: list[str] = []
+            for c_idx, cell in enumerate(cells):
+                line = cell[i] if i < len(cell) else ""
+                parts.append(" " + _pad_to_width(line, col_widths[c_idx]) + " ")
+            out.append(border_v + border_v.join(parts) + border_v)
+        return out
+
+    lines: list[str] = [top]
+    # 헤더
+    lines.extend(render_row(matrix[0]))
+    lines.append(mid)
+    # 본문 행들
+    for idx, row_cells in enumerate(matrix[1:]):
+        lines.extend(render_row(row_cells))
+        if idx < len(matrix) - 2:
+            lines.append(mid)
+    lines.append(bot)
+    return "\n".join(lines)
 
 
 def render_markdown_table(rows: list[dict]) -> str:

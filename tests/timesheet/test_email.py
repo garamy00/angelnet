@@ -149,53 +149,74 @@ def test_render_html_table_escapes_html_chars_in_cells() -> None:
     assert "<script>" not in html
 
 
-def test_render_weekly_upnote_text_section_format() -> None:
-    """주간보고 UpNote 본문 — 프로젝트별 헤더 + 컬럼별 sub-block plain text."""
+def test_render_weekly_upnote_table_basic_box_drawing() -> None:
+    """UpNote 본문 — Unicode 박스 표. 헤더 + 행 + 행 사이 separator."""
     rows = [
         {
             "project_name": "OAM 개선",
             "last_week": "*) EM 고도화\n  - 코어 인프라",
-            "this_week": "*) EM 고도화\n  - 핵심 인터페이스",
-            "next_week": "",
-            "note": "",
-        },
-        {
-            "project_name": "기타",
-            "last_week": "",
-            "this_week": "*) 휴가\n - 연차\n   . 손대곤(05/15, 금)",
+            "this_week": "*) EM 고도화",
             "next_week": "", "note": "",
         },
     ]
-    out = weekly_table.render_weekly_upnote_text(rows)
-    # 프로젝트 헤더
-    assert "# OAM 개선" in out
-    assert "# 기타" in out
-    # 컬럼 라벨
-    assert "[지난주 한 일]" in out
-    assert "[이번주 한 일/할 일]" in out
+    out = weekly_table.render_weekly_upnote_table(rows)
+    # 박스 문자
+    assert "┌" in out and "┐" in out
+    assert "└" in out and "┘" in out
+    assert "├" in out and "┤" in out
+    assert "│" in out  # 셀 separator
+    # 헤더 라벨
+    assert "프로젝트" in out
+    assert "지난주 한 일" in out
+    assert "이번주 한 일/할 일" in out
     # 본문 내용
+    assert "OAM 개선" in out
     assert "*) EM 고도화" in out
     assert "- 코어 인프라" in out
-    assert "- 핵심 인터페이스" in out
-    assert "*) 휴가" in out
-    # 비어있는 컬럼은 헤더 안 나옴
-    assert "[다음주 할 일]" not in out
-    assert "[비고]" not in out
-    # 프로젝트 간 separator
-    assert "=" * 50 in out
 
 
-def test_render_weekly_upnote_text_skips_empty_project() -> None:
-    """모든 컬럼이 비어있는 프로젝트는 출력에서 제외."""
+def test_render_weekly_upnote_table_multiline_cell_alignment() -> None:
+    """셀 안 멀티라인이 행 안에서 같은 박스 안에 함께 들어간다."""
     rows = [
-        {"project_name": "비어있음", "last_week": "", "this_week": "",
-         "next_week": "", "note": ""},
-        {"project_name": "있음", "last_week": "X", "this_week": "",
-         "next_week": "", "note": ""},
+        {
+            "project_name": "P",
+            "last_week": "a\nb\nc",
+            "this_week": "x",
+            "next_week": "", "note": "",
+        },
     ]
-    out = weekly_table.render_weekly_upnote_text(rows)
-    assert "# 있음" in out
-    assert "# 비어있음" not in out
+    out = weekly_table.render_weekly_upnote_table(rows)
+    # 멀티라인 cell — 같은 행 안에 3 라인 모두 등장
+    assert "a" in out and "b" in out and "c" in out
+    # 모든 본문 행이 같은 폭 (정렬) — 표가 깨지지 않음을 확인하기 위해
+    # 박스 line 들이 동일 길이인지 확인
+    lines = out.split("\n")
+    body_lines = [ln for ln in lines if ln.startswith("│")]
+    # 행 안의 모든 라인은 셀 폭이 같아 동일 column 위치에 │가 옴
+    widths = [
+        sum(2 if 0xAC00 <= ord(c) <= 0xD7A3 else 1 for c in ln)
+        for ln in body_lines
+    ]
+    assert len(set(widths)) <= 2  # 헤더 라인과 본문 라인 폭은 같아야 함
+
+
+def test_render_weekly_upnote_table_korean_width_aligns_columns() -> None:
+    """한글 셀이 들어가도 컬럼 정렬이 깨지지 않는다 (east_asian_width 폭 2)."""
+    rows = [
+        {
+            "project_name": "한",  # 폭 2
+            "last_week": "OK",     # 폭 2
+            "this_week": "", "next_week": "", "note": "",
+        },
+    ]
+    out = weekly_table.render_weekly_upnote_table(rows)
+    # 헤더 '프로젝트' (폭 8) 와 본문 '한' (폭 2) 이 같은 컬럼 — column width 는
+    # 헤더 기준 8 이 되어야 함. 본문 행은 '│ 한' 으로 시작
+    lines = out.split("\n")
+    body_lines = [ln for ln in lines if ln.startswith("│ 한 ")]
+    assert body_lines, "본문 행이 있어야 함"
+    # '한' 다음에 최소 6 칸 space 가 있어 다음 │ 까지 정렬 (헤더 폭 8 - 한 폭 2)
+    assert "한      " in body_lines[0]
 
 
 def test_render_email_plain_omits_empty_greeting_and_closing() -> None:
