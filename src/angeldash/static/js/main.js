@@ -567,8 +567,10 @@ function renderMonthlyGrid(data) {
   document.getElementById('monthly-modal-title').textContent =
     `📊 ${data.year_month} 타임시트 (회사 시스템)`;
 
-  if (!data.tasks || data.tasks.length === 0) {
-    body.innerHTML = '<p class="muted">이번달 입력된 task 가 없습니다.</p>';
+  const hasTasks = data.tasks && data.tasks.length > 0;
+  const hasVacs = data.vacations && data.vacations.length > 0;
+  if (!hasTasks && !hasVacs) {
+    body.innerHTML = '<p class="muted">이번달 입력된 task / 휴가가 없습니다.</p>';
     return;
   }
 
@@ -577,41 +579,81 @@ function renderMonthlyGrid(data) {
   const month = parseInt(mStr, 10);
   const dim = data.days_in_month;
 
-  // 각 일자의 요일 (0=일 ~ 6=토). 한국 기준 toUTC(year, month-1, day) 의 getUTCDay
   const dayOfWeek = (d) => {
     const dt = new Date(Date.UTC(year, month - 1, d));
     return dt.getUTCDay();
   };
 
+  // 공휴일 day 집합 (출근일 label 제외된 것만 서버가 보내줌)
+  const holidayDays = new Map();  // day → label
+  for (const h of (data.holidays || [])) {
+    holidayDays.set(h.day, h.label);
+  }
+
   const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
   const esc = (s) => String(s || '').replace(/[&<>]/g, (c) => escMap[c]);
 
-  // 헤더: task | 1(요일) | 2(요일) | ... | 합계
-  let thead = '<thead><tr><th class="task-col">task</th>';
-  for (let d = 1; d <= dim; d += 1) {
+  // 일자 헤더의 클래스 — 휴일/주말 색칠 + 셀에도 동일 적용
+  const dayClass = (d) => {
     const dow = dayOfWeek(d);
-    const cls = dow === 0 ? 'sun' : (dow === 6 ? 'sat' : '');
-    thead += `<th class="day-col ${cls}">${d}<br><small>${KR_DAY_SHORT[dow]}</small></th>`;
+    if (holidayDays.has(d)) return 'hol';
+    if (dow === 0) return 'sun';
+    if (dow === 6) return 'sat';
+    return '';
+  };
+  const dayLabel = (d) => {
+    const dow = dayOfWeek(d);
+    return KR_DAY_SHORT[dow];
+  };
+
+  // 셀 색상 — 빈/부분/8h+. wknd / hol 배경은 별도 클래스.
+  const cellClasses = (h, d) => {
+    const dow = dayOfWeek(d);
+    const bg = holidayDays.has(d)
+      ? 'bg-hol'
+      : ((dow === 0 || dow === 6) ? 'bg-wknd' : '');
+    let v = 'empty';
+    if (h >= 8) v = 'full';
+    else if (h > 0) v = 'partial';
+    return `cell ${bg} ${v}`;
+  };
+
+  // 헤더
+  let thead = '<thead><tr><th class="task-col">프로젝트(task)</th>';
+  for (let d = 1; d <= dim; d += 1) {
+    const cls = dayClass(d);
+    const title = holidayDays.has(d) ? ` title="${esc(holidayDays.get(d))}"` : '';
+    thead += `<th class="day-col ${cls}"${title}>${d}<br><small>${dayLabel(d)}</small></th>`;
   }
   thead += '<th class="total-col">합계</th></tr></thead>';
 
-  // 본문 행
+  // 본문 — task rows
   let tbody = '<tbody>';
   for (const t of data.tasks) {
     tbody += '<tr>';
     tbody += `<td class="task-col" title="${esc(t.task_name)}">${esc(t.task_name)}</td>`;
     for (let d = 1; d <= dim; d += 1) {
       const h = t.days[d] || 0;
-      const dow = dayOfWeek(d);
-      const wkndCls = (dow === 0 || dow === 6) ? 'wknd' : '';
-      let cellCls = wkndCls;
-      if (h === 0) cellCls += ' empty';
-      else if (h >= 8) cellCls += ' full';
-      else cellCls += ' partial';
-      tbody += `<td class="cell ${cellCls}">${h || ''}</td>`;
+      tbody += `<td class="${cellClasses(h, d)}">${h || ''}</td>`;
     }
     tbody += `<td class="total-col"><b>${t.total}</b></td>`;
     tbody += '</tr>';
+  }
+
+  // 휴가 rows (있을 때만, 별도 그룹으로 시각 구분)
+  if (hasVacs) {
+    for (let i = 0; i < data.vacations.length; i += 1) {
+      const v = data.vacations[i];
+      const groupCls = i === 0 ? ' vac-row vac-first' : ' vac-row';
+      tbody += `<tr class="${groupCls.trim()}">`;
+      tbody += `<td class="task-col vac-label" title="휴가 — ${esc(v.label)}">🏖 휴가 — ${esc(v.label)}</td>`;
+      for (let d = 1; d <= dim; d += 1) {
+        const h = v.days[d] || 0;
+        tbody += `<td class="${cellClasses(h, d)} vac-cell">${h || ''}</td>`;
+      }
+      tbody += `<td class="total-col"><b>${v.total}</b></td>`;
+      tbody += '</tr>';
+    }
   }
   tbody += '</tbody>';
 
@@ -619,13 +661,7 @@ function renderMonthlyGrid(data) {
   let tfoot = '<tfoot><tr><td class="task-col"><b>일별 합계</b></td>';
   for (let d = 1; d <= dim; d += 1) {
     const h = data.daily_totals[d] || 0;
-    const dow = dayOfWeek(d);
-    const wkndCls = (dow === 0 || dow === 6) ? 'wknd' : '';
-    let cellCls = wkndCls;
-    if (h === 0) cellCls += ' empty';
-    else if (h >= 8) cellCls += ' full';
-    else cellCls += ' partial';
-    tfoot += `<td class="cell ${cellCls}"><b>${h || ''}</b></td>`;
+    tfoot += `<td class="${cellClasses(h, d)}"><b>${h || ''}</b></td>`;
   }
   tfoot += `<td class="total-col"><b>${data.month_total}</b></td>`;
   tfoot += '</tr></tfoot>';

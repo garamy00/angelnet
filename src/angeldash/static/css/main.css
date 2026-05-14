@@ -713,9 +713,16 @@ table.monthly-grid thead th.task-col,
 table.monthly-grid tfoot td.task-col {
   z-index: 3;
 }
+/* 일 컬럼 — 31일까지 한 화면에 fit 시키기 위해 폭/패딩 컴팩트 */
 table.monthly-grid .day-col {
-  min-width: 40px;
+  min-width: 30px;
+  width: 30px;
   font-size: 12px;
+  padding: 4px 2px;
+}
+table.monthly-grid td.cell {
+  min-width: 30px;
+  padding: 4px 2px;
 }
 table.monthly-grid .day-col small {
   color: var(--color-muted);
@@ -726,7 +733,7 @@ table.monthly-grid .day-col small {
 table.monthly-grid .total-col {
   background: #2a3140;
   font-weight: 700;
-  min-width: 60px;
+  min-width: 56px;
   color: var(--color-text);
 }
 /* 우상단 코너 (월 그랜드 토탈) — 가장 강조 */
@@ -735,16 +742,34 @@ table.monthly-grid tfoot td.total-col {
   color: #fff;
   font-size: 14px;
 }
+
+/* 주말 — 토(파랑톤), 일(붉은톤) */
 table.monthly-grid .day-col.sat,
-table.monthly-grid .day-col.sun small,
-table.monthly-grid .day-col.sun {
+table.monthly-grid .day-col.sat small {
+  color: #93c5fd;
+}
+table.monthly-grid .day-col.sun,
+table.monthly-grid .day-col.sun small {
   color: #fca5a5;
 }
-table.monthly-grid .cell.wknd {
+/* 공휴일 — 일과 같은 붉은 톤 + 약간 진한 배경 */
+table.monthly-grid .day-col.hol,
+table.monthly-grid .day-col.hol small {
+  color: #fda4af;
+  background: rgba(248, 113, 113, 0.12);
+}
+
+/* 셀 배경 — 주말 / 공휴일 */
+table.monthly-grid .cell.bg-wknd {
   background: rgba(255, 255, 255, 0.04);
 }
+table.monthly-grid .cell.bg-hol {
+  background: rgba(248, 113, 113, 0.08);
+}
+
+/* 셀 글자 색 — 빈/부분/풀 */
 table.monthly-grid .cell.empty {
-  color: #555c66;
+  color: #4a525e;
 }
 table.monthly-grid .cell.full {
   color: #4ade80;
@@ -753,6 +778,21 @@ table.monthly-grid .cell.full {
 table.monthly-grid .cell.partial {
   color: #fde047;
   font-weight: 600;
+}
+
+/* 휴가 row 그룹 — task 와 시각 구분 */
+table.monthly-grid tr.vac-first td {
+  border-top: 2px solid var(--color-accent);
+}
+table.monthly-grid tr.vac-row .task-col {
+  color: #a78bfa;
+  background: #2a2738;
+}
+table.monthly-grid tr.vac-row .vac-cell {
+  color: #c4b5fd;
+}
+table.monthly-grid tr.vac-row .vac-cell.empty {
+  color: #4a525e;
 }
 
 /* ─── 미리보기 모달 ─────────────────────────────── */

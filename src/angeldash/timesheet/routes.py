@@ -725,20 +725,17 @@ def register_routes(app: FastAPI) -> None:
     @app.get("/api/timesheet/monthly-grid")
     async def monthly_grid_route(
         year_month: str,
+        conn=Depends(get_conn),
         client: TimesheetClient = Depends(get_client),
     ) -> dict:
-        """그 달의 task×day 매트릭스 (회사 시스템 fetch).
+        """그 달의 task×day 매트릭스 + 휴가 + 공휴일 (회사 시스템 fetch).
 
-        Returns:
-            {
-                "year_month": "YYYY-MM",
-                "tasks": [{"task_name": str, "days": {day_int: hours},
-                           "total": float}, ...] (이름순),
-                "daily_totals": {day_int: hours},
-                "month_total": float,
-                "days_in_month": int,
-            }
+        - tasks: 합계가 0 인 항목은 제외 (회사 시스템에 등록만 되고 입력 없는 task)
+        - vacations: 연차/반차 등을 type 별로 그룹화한 별도 row 들
+            연차/공가/경조사/휴직 → 8h, 반차(오전/오후)·공가(오전/오후) → 4h
+        - holidays: '출근일로 취급' label 을 제외한 진짜 공휴일 일자 set
         """
+        import datetime as _dt
         from calendar import monthrange
 
         from fastapi import HTTPException
@@ -750,19 +747,58 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(
                 400, f"invalid year_month: {year_month}",
             ) from exc
+        days_in_month = monthrange(year, month)[1]
 
+        # 회사 시스템 fetch — grid 가 핵심, 나머지는 실패해도 본 응답 유지
         try:
             grid = await client.fetch_jobtime_grid(year_month=year_month)
         except Exception as exc:
             raise HTTPException(500, f"monthly grid fetch failed: {exc}") from exc
 
-        days_in_month = monthrange(year, month)[1]
+        vacations_raw: list[dict] = []
+        holidays_raw: list[dict] = []
+        try:
+            vacations_raw = await client.list_vacations(year_month=year_month)
+        except Exception as exc:
+            logger.warning("monthly_grid: vacation fetch failed: %s", exc)
+        try:
+            holidays_raw = await client.list_holidays(year_month=year_month)
+        except Exception as exc:
+            logger.warning("monthly_grid: holiday fetch failed: %s", exc)
+
+        # 출근일로 취급할 공휴일 label 집합 (설정값)
+        exclude_raw = db_module.get_setting(
+            conn, "misc.holiday_exclude_labels"
+        ) or ""
+        exclude_labels = {
+            s.strip() for s in exclude_raw.replace("\n", ",").split(",")
+            if s.strip()
+        }
+
+        # 진짜 공휴일 일자 list (출근일 제외)
+        holidays_out: list[dict] = []
+        for h in holidays_raw:
+            label = (h.get("label") or "").strip()
+            if label in exclude_labels:
+                continue
+            date_iso = h.get("date") or ""
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+            except ValueError:
+                continue
+            if d.year != year or d.month != month:
+                continue
+            holidays_out.append({"day": d.day, "label": label})
+
+        # tasks 집계 — 합계 0 제외
         tasks: list[dict] = []
         daily_totals: dict[int, float] = {}
         month_total = 0.0
         for task_name in sorted(grid.keys()):
             days = grid[task_name]
             task_total = round(sum(days.values()), 2)
+            if task_total <= 0:
+                continue  # 모두 0 인 task hide
             month_total += task_total
             for day, hours in days.items():
                 daily_totals[day] = round(
@@ -773,9 +809,50 @@ def register_routes(app: FastAPI) -> None:
                 "days": days,
                 "total": task_total,
             })
+
+        # 휴가 — type 별 그룹화 후 반차는 4h, 그 외는 8h 적용
+        # type 라벨은 misc_auto._VAC_TYPE_LABEL 와 동일하게 한국어 표시명으로 변환
+        from . import misc_auto as ma_module
+        half_types = (
+            ma_module._AM_HALF_TYPES | ma_module._PM_HALF_TYPES
+        )
+        by_label: dict[str, dict[int, float]] = {}
+        label_order: list[str] = []
+        for v in vacations_raw:
+            vac_type = v.get("type") or ""
+            date_iso = v.get("date") or ""
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+            except ValueError:
+                continue
+            if d.year != year or d.month != month:
+                continue
+            label = ma_module._label_for_type(vac_type)
+            hours = 4.0 if vac_type in half_types else 8.0
+            if label not in by_label:
+                by_label[label] = {}
+                label_order.append(label)
+            by_label[label][d.day] = hours
+
+        vacations_out: list[dict] = []
+        for label in label_order:
+            days = by_label[label]
+            total = round(sum(days.values()), 2)
+            vacations_out.append({
+                "label": label, "days": days, "total": total,
+            })
+            # 일별 합계에도 휴가 시간을 포함 (사용자가 8h/4h 매일 합 확인 가능)
+            for day, hours in days.items():
+                daily_totals[day] = round(
+                    daily_totals.get(day, 0.0) + hours, 2,
+                )
+            month_total += total
+
         return {
             "year_month": year_month,
             "tasks": tasks,
+            "vacations": vacations_out,
+            "holidays": holidays_out,
             "daily_totals": daily_totals,
             "month_total": round(month_total, 2),
             "days_in_month": days_in_month,

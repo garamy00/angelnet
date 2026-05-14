@@ -1353,3 +1353,73 @@ def test_monthly_grid_empty_grid(api, mock_client):
     assert body["daily_totals"] == {}
     assert body["month_total"] == 0.0
     assert body["days_in_month"] == 30
+
+
+def test_monthly_grid_filters_zero_total_tasks(api, mock_client):
+    """합계 0 인 task 는 응답에 포함되지 않음."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
+        "활성 task": {1: 4.0, 2: 4.0},
+        "0인 task": {},
+        "다른 0인 task": {1: 0.0},
+    })
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    assert r.status_code == 200
+    names = [t["task_name"] for t in r.json()["tasks"]]
+    assert names == ["활성 task"]
+
+
+def test_monthly_grid_adds_vacation_rows_with_full_and_half(api, mock_client):
+    """연차/공가/경조사/휴직 → 8h, 반차 → 4h 자동 적용. type 별 row 그룹화."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.list_holidays = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[
+        # 회사 system 의 hours 값과 무관하게 type 기준으로 4/8 자동 결정
+        {"date": "2026-05-04", "type": "연차", "hours": 8.0},
+        {"date": "2026-05-13", "type": "반차(오후)", "hours": 4.0},
+        {"date": "2026-05-15", "type": "연차", "hours": 8.0},
+    ])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    body = r.json()
+    by_label = {v["label"]: v for v in body["vacations"]}
+    assert "연차" in by_label
+    assert "오후 반차" in by_label
+    # 연차 — 두 날짜 모두 8h
+    assert by_label["연차"]["days"]["4"] == 8.0
+    assert by_label["연차"]["days"]["15"] == 8.0
+    assert by_label["연차"]["total"] == 16.0
+    # 오후 반차 — 한 날짜, 4h
+    assert by_label["오후 반차"]["days"]["13"] == 4.0
+    assert by_label["오후 반차"]["total"] == 4.0
+    # 일별/월 합계에도 휴가 hours 포함
+    assert body["daily_totals"]["4"] == 8.0
+    assert body["daily_totals"]["13"] == 4.0
+    assert body["month_total"] == 20.0
+
+
+def test_monthly_grid_holidays_exclude_labels(api, mock_client):
+    """misc.holiday_exclude_labels 에 들어있는 label 은 휴일 list 에서 제외."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[
+        {"date": "2026-05-01", "label": "노동절", "types": ["public"]},
+        {"date": "2026-05-05", "label": "어린이날", "types": ["public"]},
+        {"date": "2026-05-15", "label": "가정의날", "types": ["company"]},
+    ])
+    # '가정의날' 은 출근일로 취급하도록 설정
+    api.put("/api/settings", json={
+        "misc.holiday_exclude_labels": "가정의날, 회사창립일",
+    })
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    holidays = r.json()["holidays"]
+    days = {h["day"] for h in holidays}
+    assert 1 in days   # 노동절
+    assert 5 in days   # 어린이날
+    assert 15 not in days  # 가정의날 — 제외됨
