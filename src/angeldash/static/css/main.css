@@ -85,8 +85,6 @@ header .header-right #btn-refresh {
 }
 
 main {
-  max-width: 1100px;
-  margin: 0 auto;
   padding: 20px;
 }
 
@@ -383,7 +381,8 @@ code {
 #joinable-table,
 #projects-table,
 #mappings-table,
-#patterns-table {
+#patterns-table,
+#logs-table {
   margin-top: 12px;
   width: 100%;
   border-collapse: collapse;
@@ -392,7 +391,8 @@ code {
 #joinable-table th, #joinable-table td,
 #projects-table th, #projects-table td,
 #mappings-table th, #mappings-table td,
-#patterns-table th, #patterns-table td {
+#patterns-table th, #patterns-table td,
+#logs-table th, #logs-table td {
   border-bottom: 1px solid var(--color-border);
   padding: 6px 8px;
   text-align: left;
@@ -401,7 +401,8 @@ code {
 #joinable-table thead th,
 #projects-table thead th,
 #mappings-table thead th,
-#patterns-table thead th {
+#patterns-table thead th,
+#logs-table thead th {
   background: var(--color-surface-2);
   font-weight: 600;
   border-bottom: 2px solid var(--color-border);
@@ -440,10 +441,7 @@ code {
 .ext-icon { font-size: 12px; opacity: 0.85; }
 
 /* ─── 주차 사이드바 (일일/주간업무보고) ─────────────── */
-/* main 기본 max-width:1100px 가운데 정렬을 풀고 화면 전체 폭을 사용 */
 main.with-sidebar {
-  max-width: none;
-  margin: 0;
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 16px;
