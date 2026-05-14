@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import datetime
+import json
 import logging
 import os
 import sqlite3
@@ -100,6 +102,12 @@ CREATE TABLE IF NOT EXISTS daily_meta (
     date TEXT PRIMARY KEY,
     source_commit TEXT NOT NULL DEFAULT 'done',
     misc_note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS weekly_reports (
+    week_iso TEXT PRIMARY KEY,
+    rows_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 """
 
@@ -566,3 +574,40 @@ def upsert_daily_meta(
         (date, source_commit, misc_note),
     )
     conn.commit()
+
+
+# ─── weekly_reports ───────────────────────────────────
+
+
+def get_weekly_report(
+    conn: sqlite3.Connection, week_iso: str
+) -> dict[str, Any]:
+    """그 주의 보고 rows + updated_at 반환. 없으면 빈 rows."""
+    row = conn.execute(
+        "SELECT rows_json, updated_at FROM weekly_reports WHERE week_iso = ?",
+        (week_iso,),
+    ).fetchone()
+    if row is None:
+        return {"week_iso": week_iso, "rows": [], "updated_at": None}
+    return {
+        "week_iso": week_iso,
+        "rows": json.loads(row["rows_json"]),
+        "updated_at": row["updated_at"],
+    }
+
+
+def upsert_weekly_report(
+    conn: sqlite3.Connection, week_iso: str, rows: list[dict]
+) -> str:
+    """rows 를 그 주의 보고로 저장. updated_at 갱신. 반환: 새 updated_at ISO."""
+    updated_at = datetime.datetime.now().isoformat(timespec="seconds")
+    conn.execute(
+        "INSERT INTO weekly_reports(week_iso, rows_json, updated_at) "
+        "VALUES(?, ?, ?) "
+        "ON CONFLICT(week_iso) DO UPDATE SET "
+        "  rows_json = excluded.rows_json, "
+        "  updated_at = excluded.updated_at",
+        (week_iso, json.dumps(rows, ensure_ascii=False), updated_at),
+    )
+    conn.commit()
+    return updated_at

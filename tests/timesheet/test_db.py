@@ -261,3 +261,27 @@ def test_daily_meta_rejects_invalid_source_commit(conn) -> None:
         db.upsert_daily_meta(
             conn, "2026-05-12", source_commit="bogus", misc_note="",
         )
+
+
+def test_get_weekly_report_returns_empty_when_unset(conn: sqlite3.Connection) -> None:
+    """저장 안 된 주에 대해 빈 rows 반환."""
+    result = db.get_weekly_report(conn, "2026-W20")
+    assert result == {"week_iso": "2026-W20", "rows": [], "updated_at": None}
+
+
+def test_upsert_weekly_report_round_trip(conn: sqlite3.Connection) -> None:
+    """upsert → get 으로 동일 rows 복구."""
+    rows = [
+        {
+            "project_name": "OAM 공통",
+            "last_week": "*) A",
+            "this_week": "*) B",
+            "next_week": "*) C",
+            "note": "비고",
+        },
+    ]
+    updated_at = db.upsert_weekly_report(conn, "2026-W20", rows)
+    assert updated_at
+    result = db.get_weekly_report(conn, "2026-W20")
+    assert result["rows"] == rows
+    assert result["updated_at"] == updated_at
