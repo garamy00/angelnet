@@ -96,9 +96,42 @@ async function moveRow(idx, delta) {
   renderRows();
 }
 
-function autoResize(ta) {
-  ta.style.height = 'auto';
-  ta.style.height = (ta.scrollHeight + 2) + 'px';
+// contenteditable div 는 내용에 따라 자동 height — autoResize 필요 없음.
+// 그러나 사용자가 행 별 drag handle 로 명시 height 를 잡았을 때는 그 값을 유지.
+
+function attachRowHeightDrag(tr) {
+  // tr 마지막 td(.row-actions) 안에 ≡ grip 추가. mousedown 후 drag 로 그 행의
+  // 모든 cell-text div 의 min-height 를 동일하게 갱신.
+  const actions = tr.querySelector('.row-actions');
+  if (!actions) return;
+  const handle = document.createElement('div');
+  handle.className = 'row-resize-handle';
+  handle.title = '드래그해서 행 높이 조절';
+  actions.appendChild(handle);
+
+  handle.addEventListener('mousedown', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const startY = ev.clientY;
+    const startHeight = tr.getBoundingClientRect().height;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      const newHeight = Math.max(40, Math.round(startHeight + (e.clientY - startY)));
+      tr.querySelectorAll('.cell-text').forEach((div) => {
+        div.style.minHeight = `${newHeight}px`;
+      });
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 function renderRow(idx, normalMaxIdx) {
@@ -125,21 +158,21 @@ function renderRow(idx, normalMaxIdx) {
   tdName.appendChild(nameInput);
   tr.appendChild(tdName);
 
-  // 4개 텍스트 셀 (편집은 일반/휴가 행 모두 가능 — 휴가 행은 다음 재생성 때 덮어쓰기)
+  // 4개 텍스트 셀 — contenteditable div 사용. textarea 의 외곽선/scroll bar 없이
+  // 셀 자체에 텍스트가 들어가는 느낌. 줄바꿈은 white-space: pre-wrap 으로 유지.
+  // innerText 로 읽어 줄바꿈을 \n 으로 정확히 보존.
   for (const key of COL_KEYS) {
     const td = document.createElement('td');
-    const ta = document.createElement('textarea');
-    ta.className = 'cell-text';
-    ta.value = row[key] || '';
-    ta.rows = 3;
-    ta.addEventListener('input', () => autoResize(ta));
-    ta.addEventListener('blur', () => {
-      currentRows[idx][key] = ta.value;
+    const div = document.createElement('div');
+    div.className = 'cell-text';
+    div.contentEditable = 'plaintext-only';  // 마크업 paste 차단 (Chrome/Safari)
+    div.textContent = row[key] || '';
+    div.addEventListener('blur', () => {
+      currentRows[idx][key] = div.innerText;
       saveAll();
     });
-    td.appendChild(ta);
+    td.appendChild(div);
     tr.appendChild(td);
-    queueMicrotask(() => autoResize(ta));
   }
 
   // 액션 td: 휴가 행은 '자동' 라벨, 일반 행은 ▲ ▼ 🗑
@@ -180,6 +213,9 @@ function renderRow(idx, normalMaxIdx) {
     tdActions.append(upBtn, dnBtn, delBtn);
   }
   tr.appendChild(tdActions);
+
+  // 행 높이 drag handle — 휴가 행도 동일 동작 (자동 라벨 옆에 grip)
+  attachRowHeightDrag(tr);
 
   return tr;
 }

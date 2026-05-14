@@ -704,19 +704,28 @@ a:hover { filter: brightness(1.2); }
   min-height: 60px;
   background: transparent;
   border: none;
+  outline: none;
   color: var(--color-text);
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.4;
-  resize: none;   /* 셀별 수동 resize 비활성 — 내용 입력에 따라 autoResize 가 자동 조절 */
   padding: 2px;
   white-space: pre-wrap;
-  overflow: hidden;  /* scroll bar 자국 숨김 */
+  word-break: break-word;
+  cursor: text;
 }
-.weekly-table td > .cell-project:focus,
-.weekly-table td > .cell-text:focus {
-  outline: 1px solid var(--color-accent);
-  outline-offset: -1px;
+/* contenteditable div 가 비어있을 때 placeholder 같은 시각 단서 (옵션) */
+.weekly-table td > .cell-text:empty::before {
+  content: "";
+  display: inline-block;
+}
+/* focus 시 별도 외곽선 X, 셀 배경만 살짝 tint 해서 활성 상태 표시 */
+.weekly-table td:has(.cell-text:focus),
+.weekly-table td:has(.cell-project:focus) {
+  background: rgba(56, 189, 248, 0.06);
+}
+.weekly-table td > .cell-project:focus {
+  outline: none;
 }
 .weekly-table .row-del {
   background: transparent;
@@ -1103,6 +1112,35 @@ table.monthly-grid tr.vac-row .task-col {
   opacity: 0.3;
   cursor: not-allowed;
 }
+/* 행 높이 조절 handle — row-actions td 안 마지막 자식. ≡ 모양 */
+.weekly-table .row-resize-handle {
+  margin-top: 6px;
+  height: 8px;
+  width: 100%;
+  cursor: row-resize;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 30%,
+    var(--color-border) 30% 45%,
+    transparent 45% 55%,
+    var(--color-border) 55% 70%,
+    transparent 70%
+  );
+  border-radius: 2px;
+  opacity: 0.5;
+}
+.weekly-table .row-resize-handle:hover {
+  opacity: 1;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 30%,
+    var(--color-accent) 30% 45%,
+    transparent 45% 55%,
+    var(--color-accent) 55% 70%,
+    transparent 70%
+  );
+}
+
 .weekly-table .row-vacation .cell-project {
   color: var(--color-muted);
   font-style: italic;
