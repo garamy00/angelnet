@@ -708,9 +708,10 @@ a:hover { filter: brightness(1.2); }
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.4;
-  resize: vertical;
+  resize: none;   /* 셀별 수동 resize 비활성 — 내용 입력에 따라 autoResize 가 자동 조절 */
   padding: 2px;
   white-space: pre-wrap;
+  overflow: hidden;  /* scroll bar 자국 숨김 */
 }
 .weekly-table td > .cell-project:focus,
 .weekly-table td > .cell-text:focus {
