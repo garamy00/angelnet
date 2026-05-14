@@ -1199,3 +1199,66 @@ def test_misc_auto_route_uses_exclude_labels(api, mock_client):
     assert r.status_code == 200
     # 5/22 가 영업일 → 연차 → "내일 연차"
     assert r.json()["text"] == "내일 연차입니다"
+
+
+# ─── 주간업무보고 API 회귀 ─────────────────────────────
+
+
+def test_get_weekly_report_returns_empty_for_unset(api):
+    r = api.get("/api/weekly-reports/2026-W20")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["week_iso"] == "2026-W20"
+    assert body["rows"] == []
+
+
+def test_put_weekly_report_round_trip(api):
+    rows = [
+        {"project_name": "OAM", "last_week": "a", "this_week": "b",
+         "next_week": "c", "note": "d"},
+    ]
+    r = api.put("/api/weekly-reports/2026-W20", json={"rows": rows})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+    r2 = api.get("/api/weekly-reports/2026-W20")
+    assert r2.json()["rows"] == rows
+
+
+def test_generate_weekly_report_preserves_manual(api):
+    # 수동 입력
+    rows = [
+        {"project_name": "OAM", "last_week": "", "this_week": "",
+         "next_week": "차주 작업", "note": "비고"},
+    ]
+    api.put("/api/weekly-reports/2026-W20", json={"rows": rows})
+    # generate 호출 — daily entries 가 없어도 200 응답이어야 함
+    r = api.post(
+        "/api/weekly-reports/2026-W20/generate",
+        json={"preserve_manual": True},
+    )
+    assert r.status_code == 200
+    assert "rows" in r.json()
+
+
+def test_weekly_report_upnote_requires_notebook_id(api):
+    api.put("/api/weekly-reports/2026-W20", json={"rows": [
+        {"project_name": "X", "last_week": "a", "this_week": "b",
+         "next_week": "", "note": ""},
+    ]})
+    r = api.post(
+        "/api/actions/weekly-report-upnote",
+        json={"week_iso": "2026-W20"},
+    )
+    assert r.status_code == 400
+    assert "weekly_notebook_id" in r.json()["detail"]
+
+
+def test_weekly_report_upnote_requires_non_empty_rows(api):
+    api.put("/api/settings", json={"upnote.weekly_notebook_id": "test-nb"})
+    r = api.post(
+        "/api/actions/weekly-report-upnote",
+        json={"week_iso": "2026-W20"},
+    )
+    assert r.status_code == 400
+    assert "비어" in r.json()["detail"]

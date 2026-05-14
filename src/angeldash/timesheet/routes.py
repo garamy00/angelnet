@@ -77,6 +77,24 @@ class TimesheetPushOneInput(BaseModel):
     hours: float  # 0 이면 그 셀 삭제와 동일
 
 
+class WeeklyReportInput(BaseModel):
+    """PUT /api/weekly-reports/{week_iso} 페이로드."""
+
+    rows: list[dict]
+
+
+class WeeklyReportGenerateInput(BaseModel):
+    """POST /api/weekly-reports/{week_iso}/generate 페이로드."""
+
+    preserve_manual: bool = True
+
+
+class WeeklyReportUpnoteInput(BaseModel):
+    """POST /api/actions/weekly-report-upnote 페이로드."""
+
+    week_iso: str
+
+
 class PatternMappingInput(BaseModel):
     """POST /api/pattern-mappings 페이로드."""
 
@@ -715,6 +733,110 @@ def register_routes(app: FastAPI) -> None:
             return await client.list_holidays(year_month=ym)
         except Exception as exc:
             raise HTTPException(500, str(exc)) from exc
+
+    # ─── Weekly Report API ───────────────────────────────
+
+    from . import weekly_table as weekly_module
+
+    @app.get("/api/weekly-reports/{week_iso}")
+    async def get_weekly_report_route(
+        week_iso: str, conn=Depends(get_conn)
+    ) -> dict:
+        return db_module.get_weekly_report(conn, week_iso)
+
+    @app.put("/api/weekly-reports/{week_iso}")
+    async def put_weekly_report_route(
+        week_iso: str,
+        payload: WeeklyReportInput,
+        conn=Depends(get_conn),
+    ) -> dict:
+        updated_at = db_module.upsert_weekly_report(conn, week_iso, payload.rows)
+        return {"ok": True, "updated_at": updated_at}
+
+    @app.post("/api/weekly-reports/{week_iso}/generate")
+    async def generate_weekly_report_route(
+        week_iso: str,
+        payload: WeeklyReportGenerateInput,
+        conn=Depends(get_conn),
+    ) -> dict:
+        existing = db_module.get_weekly_report(conn, week_iso)
+        preserve = existing["rows"] if payload.preserve_manual else None
+        rows = weekly_module.build_weekly_table_rows(
+            conn, week_iso=week_iso, preserve_manual_rows=preserve,
+        )
+        updated_at = db_module.upsert_weekly_report(conn, week_iso, rows)
+        return {"week_iso": week_iso, "rows": rows, "updated_at": updated_at}
+
+    @app.post("/api/actions/weekly-report-upnote")
+    async def action_weekly_report_upnote(
+        payload: WeeklyReportUpnoteInput, conn=Depends(get_conn),
+    ) -> dict:
+        from fastapi import HTTPException
+
+        from . import upnote as upnote_module
+
+        notebook_id = (
+            db_module.get_setting(conn, "upnote.weekly_notebook_id") or ""
+        )
+        if not notebook_id:
+            raise HTTPException(
+                400,
+                "upnote.weekly_notebook_id 가 설정되지 않았습니다. "
+                "설정 페이지에서 주간업무보고 노트북 ID 를 먼저 등록하세요.",
+            )
+
+        title_template = (
+            db_module.get_setting(conn, "upnote.title_template")
+            or SETTING_DEFAULTS["upnote.title_template"]
+        )
+        markdown_setting = (
+            db_module.get_setting(conn, "upnote.markdown")
+            or SETTING_DEFAULTS["upnote.markdown"]
+        )
+        markdown = markdown_setting.strip().lower() == "true"
+        wrap_setting = (
+            db_module.get_setting(conn, "upnote.wrap_in_code_block")
+            or SETTING_DEFAULTS["upnote.wrap_in_code_block"]
+        )
+        wrap_in_code = wrap_setting.strip().lower() == "true"
+
+        wr = db_module.get_weekly_report(conn, payload.week_iso)
+        rows = wr["rows"]
+        if not rows:
+            raise HTTPException(
+                400, "이 주의 보고서가 비어있습니다. 먼저 생성/편집하세요.",
+            )
+
+        ctx_globals = fmt_module._week_globals(payload.week_iso)
+        try:
+            title = fmt_module.render_upnote_title(title_template, ctx_globals)
+        except Exception as exc:
+            db_module.log_action(
+                conn, "weekly_report_upnote", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(400, str(exc)) from exc
+
+        text = weekly_module.render_markdown_table(rows)
+        if wrap_in_code:
+            text = "```\n" + text + "\n```"
+
+        try:
+            url = upnote_module.open_new_note(
+                title=title, text=text,
+                notebook_id=notebook_id, markdown=markdown,
+            )
+            logger.info("Weekly UpNote url: %s", url[:300])
+        except Exception as exc:
+            db_module.log_action(
+                conn, "weekly_report_upnote", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(500, str(exc)) from exc
+
+        db_module.log_action(
+            conn, "weekly_report_upnote", payload.week_iso, "ok",
+            f"title={title}",
+        )
+        return {"title": title, "text": text, "opened": True}
 
     # ─── Settings + Logs API ────────────────────────────
 
