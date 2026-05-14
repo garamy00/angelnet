@@ -68,7 +68,11 @@ def register_routes(app: FastAPI) -> None:
         event_id = await client.create_reservation(password, payload)
         return {"id": event_id}
 
-    @app.delete("/api/reservations/{event_id}", status_code=204)
+    @app.delete(
+        "/api/reservations/{event_id}",
+        status_code=204,
+        response_model=None,
+    )
     async def delete_reservation(
         event_id: int,
         event_date: str = Query(..., description="원본 예약일 YYYY-MM-DD"),
