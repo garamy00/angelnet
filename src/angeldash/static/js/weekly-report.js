@@ -26,11 +26,8 @@ function shiftWeek(weekIso, delta) {
 }
 
 function setWeekLabel() {
-  const dates = weekDates(currentWeek);
-  const start = dates[0].slice(5); // MM-DD
-  const end = dates[6].slice(5);
-  document.getElementById('week-label').textContent =
-    `${currentWeek} (${start} ~ ${end})`;
+  // daily report 와 동일한 표기 — 'YYYY-Www'
+  document.getElementById('week-label').textContent = currentWeek;
 }
 
 async function loadWeek() {
