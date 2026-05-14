@@ -99,6 +99,10 @@ def build_app(
         # 기본 페이지: 일일업무보고
         return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
 
+    @app.get("/weekly-report.html")
+    async def weekly_report_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "weekly-report.html", headers=_NO_CACHE)
+
     # 통합 nav 에서 가리키는 보조 페이지들
     @app.get("/rooms.html")
     async def rooms_page() -> FileResponse:
