@@ -20,13 +20,18 @@
   <main>
     <section>
       <h2>UpNote</h2>
-      <label>노트북 이름
+      <label>노트북 이름 — 일일/주간 노트 (기록용)
         <input id="notebook-id" type="text" placeholder="### 일일 업무 보고 ###">
+      </label>
+      <label>노트북 이름 — 주간업무보고 (팀장 보고용)
+        <input id="weekly-notebook-id" type="text" placeholder="### 주간업무보고 ###">
       </label>
       <p class="muted">
         UpNote 의 <code>note/new</code> 의 <code>notebook</code> 파라미터에 전달할 노트북 이름.
         하위 노트북은 슬래시(<code>/</code>) 로 경로 표기 (예: <code>업무/2026</code>).
-        비워두면 UpNote 기본 노트북에 저장됩니다.
+        일일/주간 노트(상단)는 본인 기록용 — 일일업무보고 페이지의 🔄 UpNote 저장(주) 가 사용.
+        주간업무보고(하단)는 팀장 보고용 — 주간업무보고 페이지의 📤 UpNote 저장 이 사용.
+        비워두면 해당 액션 비활성화.
       </p>
 
       <label>본문을 코드 블록으로 감싸기

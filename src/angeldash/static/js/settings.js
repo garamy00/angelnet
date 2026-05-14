@@ -3,6 +3,7 @@ import { apiGet, apiPut, apiPost, isoWeek, toast } from './api.js';
 // text 필드들. join.auto_task_name 은 /projects.html 의 라디오로 이동.
 const KEYS = {
   'notebook-id': 'upnote.notebook_id',
+  'weekly-notebook-id': 'upnote.weekly_notebook_id',
   't-team-report': 'team_report.template',
   't-upnote-title': 'upnote.title_template',
   't-upnote-body': 'upnote.body_template',
