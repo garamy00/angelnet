@@ -31,7 +31,9 @@ BOT_BLOCK_MARKER = "Automated requests are not allowed"
 # 회의실 페이지는 호출이 드물어 (페이지 진입 시 한 번만) 만료된 cookie 를 그대로
 # 쓸 위험이 크다. 회사 Spring 서버의 실제 idle TTL 보다 짧게 잡아, 페이지를 새로
 # 열 때마다 me 핸들러가 강제로 fresh login 수행하도록 한다.
-SESSION_TTL = 25 * 60  # 25분
+# 5분 — AutoReloginHttp 가 못 잡는 만료 응답 케이스(200+JSON 등) 도 cover 하기
+# 위해 보수적으로 짧게 설정.
+SESSION_TTL = 5 * 60  # 5분
 
 
 def _is_bot_blocked(payload: Any) -> bool:
@@ -81,6 +83,14 @@ class AngelNetClient:
         self._session_expires = 0.0
         self._user = None
         await self.login(self._password)
+
+    async def force_relogin(self) -> None:
+        """라우트가 직접 호출할 수 있는 강제 재로그인.
+
+        AutoReloginHttp 가 못 잡는 만료 응답 (200 + 빈 데이터 등) 케이스에서
+        라우트가 ApiError 를 catch 한 뒤 이 함수로 명시적 재로그인 후 재시도한다.
+        """
+        await self._refresh_session()
 
     # ─── 인증 ────────────────────────────────────────────
 

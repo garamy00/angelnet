@@ -106,6 +106,45 @@ def test_get_reservations_with_room_id(app_client):
     )
 
 
+def test_get_reservations_retries_after_force_relogin_on_api_error(app_client):
+    """첫 호출이 ApiError → force_relogin → 두 번째 호출은 성공 — 라우트 retry 동작.
+
+    회사 Spring API 가 만료 시 AutoReloginHttp 가 못 잡는 응답을 보낼 때
+    (예: 200 + 빈/이상 데이터) 라우트 레벨에서 한 번 더 시도하기 위한 안전망.
+    """
+    from angeldash.rooms.client import ApiError
+    client, fake = app_client
+    fake.force_relogin = AsyncMock(return_value=None)
+    # 첫 호출은 만료 의심으로 ApiError, 두 번째 호출은 정상 응답
+    fake.list_reservations = AsyncMock(side_effect=[
+        ApiError("session expired"),
+        [Reservation.model_validate(SAMPLE_RES)],
+    ])
+
+    r = client.get("/api/reservations?start=2026-05-01&end=2026-08-01")
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+    # force_relogin 이 한 번 호출되고 list_reservations 가 두 번 호출됨
+    fake.force_relogin.assert_awaited_once()
+    assert fake.list_reservations.await_count == 2
+
+
+def test_get_reservations_propagates_error_when_retry_also_fails(app_client):
+    """두 번째 호출도 실패하면 caller 에게 에러 전달 — 무한 루프 방지."""
+    from angeldash.rooms.client import ApiError
+    client, fake = app_client
+    fake.force_relogin = AsyncMock(return_value=None)
+    fake.list_reservations = AsyncMock(side_effect=[
+        ApiError("session expired"),
+        ApiError("still expired"),
+    ])
+
+    r = client.get("/api/reservations?start=2026-05-01&end=2026-08-01")
+    assert r.status_code >= 400  # 두 번째도 실패 → 그대로 에러 전달
+    # 정확히 두 번만 호출 (force_relogin 1 + list_reservations 2)
+    assert fake.list_reservations.await_count == 2
+
+
 def test_post_reservations_creates_without_email(app_client):
     """서버는 직접 이메일을 보내지 않는다 (AngelNet Spring 서버가 자동 발송)."""
     client, fake = app_client
