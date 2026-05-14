@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>주간업무보고 — AngelDash</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">📅 일일업무보고</a>
+      <a href="/weekly-report.html" class="active">📈 주간업무보고</a>
+      <a href="/projects.html">🗂 프로젝트</a>
+      <a href="/rooms.html">🗓 회의실예약</a>
+      <a href="/vacation.html">🏖 휴가조회</a>
+      <a href="/logs.html">📋 로그</a>
+      <a href="/settings.html">⚙️ 설정</a>
+    </nav>
+  </header>
+  <main>
+    <section class="week-header">
+      <button id="prev-week">◀ 이전 주</button>
+      <span id="week-label">로딩…</span>
+      <button id="this-week">이번 주</button>
+      <button id="next-week">다음 주 ▶</button>
+      <span class="spacer"></span>
+      <button id="btn-copy-html" title="HTML 표로 클립보드 복사 (Outlook 친화)">📋 HTML 표 복사</button>
+      <button id="btn-upnote-weekly" class="primary" title="UpNote 의 주간업무보고 노트북에 저장">📤 UpNote 저장</button>
+    </section>
+
+    <section id="weekly-empty" hidden>
+      <p class="muted">이 주의 보고서가 아직 없습니다.</p>
+      <button class="primary" id="btn-generate-initial">📥 daily entries 에서 생성</button>
+    </section>
+
+    <section id="weekly-table-wrap">
+      <table id="weekly-table" class="weekly-table">
+        <thead>
+          <tr>
+            <th>프로젝트</th>
+            <th>지난주 한 일</th>
+            <th>이번주 한 일/할 일</th>
+            <th>다음주 할 일</th>
+            <th>비고</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="weekly-rows"></tbody>
+      </table>
+      <div class="weekly-actions">
+        <button id="btn-add-row">+ 행 추가</button>
+        <button id="btn-regenerate" title="last_week/this_week 만 다시 자동 채움 (다음주/비고 보존)">🔄 재생성</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/static/js/weekly-report.js"></script>
+</body>
+</html>
