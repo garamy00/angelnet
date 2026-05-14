@@ -589,85 +589,6 @@ def render_email_plain(
     return "\n\n".join(chunks)
 
 
-def _display_width(text: str) -> int:
-    """monospace 환경에서의 표시 폭. 한글/일본/중국어/이모지는 2, 그 외 1.
-
-    UpNote 코드블록 같은 monospace 영역에서 컬럼 정렬을 맞추기 위함.
-    """
-    import unicodedata
-    return sum(
-        2 if unicodedata.east_asian_width(c) in ("F", "W") else 1
-        for c in text
-    )
-
-
-def _pad_to_width(text: str, width: int) -> str:
-    """text 를 표시 폭 width 까지 trailing spaces 로 padding."""
-    return text + " " * (width - _display_width(text))
-
-
-def render_weekly_upnote_table(rows: list[dict]) -> str:
-    """주간업무보고 UpNote 본문 — Unicode 박스 표.
-
-    monospace 환경(코드블록) 에서 시각적으로 표 형식을 유지. 셀 안 줄바꿈은
-    같은 행의 다음 라인에 그대로 출력되므로 트리 들여쓰기도 보존된다.
-    한글 폭은 east_asian_width 기준 2 로 계산.
-    """
-    headers = ("프로젝트", "지난주 한 일", "이번주 한 일/할 일", "다음주 할 일", "비고")
-    keys = ("project_name", "last_week", "this_week", "next_week", "note")
-    n_cols = len(headers)
-
-    # 헤더 + 각 행을 [라인 리스트, ...] 로 정규화 (셀 = 라인 리스트)
-    matrix: list[list[list[str]]] = []
-    matrix.append([[h] for h in headers])
-    for r in rows:
-        cells: list[list[str]] = []
-        for k in keys:
-            body = (r.get(k) or "").rstrip("\n")
-            cells.append(body.split("\n") if body else [""])
-        matrix.append(cells)
-
-    # 각 컬럼의 max 표시폭 결정
-    col_widths: list[int] = []
-    for c in range(n_cols):
-        width = 0
-        for row in matrix:
-            for line in row[c]:
-                width = max(width, _display_width(line))
-        col_widths.append(width)
-
-    # 박스 그리기 — 위/중간/아래 separator + 각 셀 라인
-    pad = 1  # 양옆 space
-    border_h = "─"
-    border_v = "│"
-    top = "┌" + "┬".join(border_h * (w + pad * 2) for w in col_widths) + "┐"
-    mid = "├" + "┼".join(border_h * (w + pad * 2) for w in col_widths) + "┤"
-    bot = "└" + "┴".join(border_h * (w + pad * 2) for w in col_widths) + "┘"
-
-    def render_row(cells: list[list[str]]) -> list[str]:
-        height = max(len(cell) for cell in cells)
-        out: list[str] = []
-        for i in range(height):
-            parts: list[str] = []
-            for c_idx, cell in enumerate(cells):
-                line = cell[i] if i < len(cell) else ""
-                parts.append(" " + _pad_to_width(line, col_widths[c_idx]) + " ")
-            out.append(border_v + border_v.join(parts) + border_v)
-        return out
-
-    lines: list[str] = [top]
-    # 헤더
-    lines.extend(render_row(matrix[0]))
-    lines.append(mid)
-    # 본문 행들
-    for idx, row_cells in enumerate(matrix[1:]):
-        lines.extend(render_row(row_cells))
-        if idx < len(matrix) - 2:
-            lines.append(mid)
-    lines.append(bot)
-    return "\n".join(lines)
-
-
 def render_markdown_table(rows: list[dict]) -> str:
     """마크다운 표 (UpNote 본문 + plain 폴백).
 
@@ -687,9 +608,15 @@ def render_markdown_table(rows: list[dict]) -> str:
     def _cell(s: str) -> str:
         if not s:
             return ""
-        # 줄별로 헤더 처리 후 pipe escape, <br> join
-        lines = [_bold_headers(ln) for ln in s.split("\n")]
-        return "<br>".join(ln.replace("|", "\\|") for ln in lines)
+        # 줄 시작 spaces 를 &nbsp; 로 (markdown 표 셀에서 들여쓰기 보존).
+        # 줄별 헤더 bold 처리 후 pipe escape, <br> join.
+        out_lines: list[str] = []
+        for ln in s.split("\n"):
+            stripped = ln.lstrip(" ")
+            indent = len(ln) - len(stripped)
+            content = _bold_headers(stripped).replace("|", "\\|")
+            out_lines.append("&nbsp;" * indent + content)
+        return "<br>".join(out_lines)
 
     out: list[str] = []
     out.append("| " + " | ".join(_COL_HEADERS) + " |")

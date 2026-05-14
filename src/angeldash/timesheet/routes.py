@@ -980,16 +980,9 @@ def register_routes(app: FastAPI) -> None:
             db_module.get_setting(conn, "upnote.title_template")
             or SETTING_DEFAULTS["upnote.title_template"]
         )
-        markdown_setting = (
-            db_module.get_setting(conn, "upnote.markdown")
-            or SETTING_DEFAULTS["upnote.markdown"]
-        )
-        markdown = markdown_setting.strip().lower() == "true"
-        wrap_setting = (
-            db_module.get_setting(conn, "upnote.wrap_in_code_block")
-            or SETTING_DEFAULTS["upnote.wrap_in_code_block"]
-        )
-        wrap_in_code = wrap_setting.strip().lower() == "true"
+        # 주간업무보고는 markdown 표가 필수 — 사용자 setting (일일보고용
+        # markdown=false / wrap=true) 을 무시하고 항상 markdown 렌더 + wrap off.
+        markdown = True
 
         wr = db_module.get_weekly_report(conn, payload.week_iso)
         rows = wr["rows"]
@@ -1007,13 +1000,10 @@ def register_routes(app: FastAPI) -> None:
             )
             raise HTTPException(400, str(exc)) from exc
 
-        # 주간업무보고 UpNote 는 Unicode 박스 표 (monospace) 로 시각화.
-        # markdown 표의 셀 안 줄바꿈(<br>) / 강조(**\*)…**) 가 사용자의
-        # wrap_in_code_block / markdown=false 환경에서 raw 로 노출되는 문제 회피.
-        # ASCII 폭 계산으로 한글 셀도 정렬됨 (east_asian_width 기준).
-        text = weekly_module.render_weekly_upnote_table(rows)
-        if wrap_in_code:
-            text = "```\n" + text + "\n```"
+        # 주간업무보고는 markdown 표로 발송 — UpNote 의 markdown 렌더가
+        # 처리하도록 위에서 markdown=True / wrap=False 로 강제 설정.
+        # 셀 안 줄바꿈은 <br>, 들여쓰기 spaces 는 &nbsp; 로 변환되어 보존됨.
+        text = weekly_module.render_markdown_table(rows)
 
         try:
             url = upnote_module.open_new_note(
