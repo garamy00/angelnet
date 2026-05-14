@@ -206,6 +206,119 @@ def test_resolve_project_treats_whitespace_as_unset(seeded_conn) -> None:
     assert "OAM 공통" in names  # whitespace 만 → fallback
 
 
+def test_build_rows_preserves_manual_row_order(seeded_conn) -> None:
+    """사용자가 ▲▼ 로 정한 순서가 재생성에서도 그대로 보존된다."""
+    # 자동 순서는 OAM 공통 → SKT SMSC → (매핑 없음) 인데
+    # manual 에서는 SKT SMSC → OAM 공통 순으로 둠
+    manual = [
+        {"project_name": "SKT SMSC", "last_week": "", "this_week": "",
+         "next_week": "", "note": ""},
+        {"project_name": "OAM 공통", "last_week": "", "this_week": "",
+         "next_week": "", "note": ""},
+    ]
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20", preserve_manual_rows=manual,
+    )
+    names = [r["project_name"] for r in rows]
+    # manual 순서가 앞쪽에서 유지되고, 새 프로젝트('(매핑 없음)')는 뒤에 추가
+    assert names.index("SKT SMSC") < names.index("OAM 공통")
+    assert names.index("OAM 공통") < names.index("(매핑 없음)")
+
+
+def test_build_rows_no_vacation_row_when_empty(seeded_conn) -> None:
+    """vacations 인자를 안 주거나 빈 리스트면 휴가 행이 추가되지 않는다."""
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+    )
+    names = [r["project_name"] for r in rows]
+    assert weekly_table.VACATION_PROJECT_NAME not in names
+
+    rows2 = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20", vacations=[],
+    )
+    names2 = [r["project_name"] for r in rows2]
+    assert weekly_table.VACATION_PROJECT_NAME not in names2
+
+
+def test_build_rows_vacation_row_this_week_pm_half(seeded_conn) -> None:
+    """이번주 오후 반차 1건 → 휴가 행 마지막, this_week 에 형식."""
+    vacs = [{"date": "2026-05-13", "type": "반차(오후)", "hours": 4.0}]
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+        vacations=vacs, author_name="손대곤 부장",
+    )
+    assert rows[-1]["project_name"] == weekly_table.VACATION_PROJECT_NAME
+    cell = rows[-1]["this_week"]
+    assert cell.startswith("*) 휴가\n")
+    assert " - 오후 반차" in cell
+    assert "   . 손대곤 부장(05/13, 수, 오후)" in cell
+    # 지난주 셀은 비어있어야 함
+    assert rows[-1]["last_week"] == ""
+
+
+def test_build_rows_vacation_consecutive_range(seeded_conn) -> None:
+    """연속 4일 연차 → MM/DD~DD, 요일~요일 범위로 압축."""
+    vacs = [
+        {"date": "2026-05-11", "type": "연차", "hours": 8.0},
+        {"date": "2026-05-12", "type": "연차", "hours": 8.0},
+        {"date": "2026-05-13", "type": "연차", "hours": 8.0},
+        {"date": "2026-05-14", "type": "연차", "hours": 8.0},
+    ]
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+        vacations=vacs, author_name="손대곤",
+    )
+    cell = rows[-1]["this_week"]
+    assert " - 연차" in cell
+    assert "   . 손대곤(05/11~14, 월~목)" in cell
+
+
+def test_build_rows_vacation_two_types_split_into_groups(seeded_conn) -> None:
+    """한 주에 두 type → 각 type 마다 ' - 라벨' 항목으로 분리."""
+    vacs = [
+        {"date": "2026-05-11", "type": "반차(오전)", "hours": 4.0},
+        {"date": "2026-05-13", "type": "연차", "hours": 8.0},
+    ]
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+        vacations=vacs, author_name="손대곤",
+    )
+    cell = rows[-1]["this_week"]
+    assert " - 오전 반차" in cell
+    assert " - 연차" in cell
+    assert "   . 손대곤(05/11, 월, 오전)" in cell
+    assert "   . 손대곤(05/13, 수)" in cell
+
+
+def test_build_rows_vacation_fills_last_and_this_week(seeded_conn) -> None:
+    """지난주/이번주 양쪽에 휴가 → 각 셀에 분리되어 채워짐."""
+    vacs = [
+        # 지난주 (W19, 2026-05-04 월)
+        {"date": "2026-05-04", "type": "연차", "hours": 8.0},
+        # 이번주 (W20, 2026-05-14 목)
+        {"date": "2026-05-14", "type": "반차(오후)", "hours": 4.0},
+    ]
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+        vacations=vacs, author_name="손대곤",
+    )
+    last_cell = rows[-1]["last_week"]
+    this_cell = rows[-1]["this_week"]
+    assert "   . 손대곤(05/04, 월)" in last_cell
+    assert "   . 손대곤(05/14, 목, 오후)" in this_cell
+
+
+def test_build_rows_vacation_author_name_empty_omits_prefix(seeded_conn) -> None:
+    """author_name 비면 괄호 앞에 이름 prefix 가 없다."""
+    vacs = [{"date": "2026-05-13", "type": "연차", "hours": 8.0}]
+    rows = weekly_table.build_weekly_table_rows(
+        seeded_conn, week_iso="2026-W20",
+        vacations=vacs, author_name="",
+    )
+    cell = rows[-1]["this_week"]
+    assert "   . (05/13, 수)" in cell
+
+
 def test_two_categories_same_weekly_name_merged_into_one_row(
     seeded_conn,
 ) -> None:

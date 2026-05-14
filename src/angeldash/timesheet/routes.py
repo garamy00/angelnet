@@ -760,11 +760,44 @@ def register_routes(app: FastAPI) -> None:
         week_iso: str,
         payload: WeeklyReportGenerateInput,
         conn=Depends(get_conn),
+        client: TimesheetClient = Depends(get_client),
     ) -> dict:
+        import datetime as _dt
+
         existing = db_module.get_weekly_report(conn, week_iso)
         preserve = existing["rows"] if payload.preserve_manual else None
+
+        # 지난주/이번주 가 걸친 모든 month 휴가 fetch (set 으로 중복 제거)
+        year_s, w_s = week_iso.split("-W")
+        this_monday = _dt.date.fromisocalendar(int(year_s), int(w_s), 1)
+        this_friday = this_monday + _dt.timedelta(days=4)
+        last_monday = this_monday - _dt.timedelta(days=7)
+        last_friday = last_monday + _dt.timedelta(days=4)
+        months = {
+            d.strftime("%Y-%m")
+            for d in (last_monday, last_friday, this_monday, this_friday)
+        }
+        all_vacations: list[dict] = []
+        for ym in sorted(months):
+            try:
+                all_vacations.extend(await client.list_vacations(year_month=ym))
+            except Exception as exc:
+                # 휴가 fetch 실패는 경고만 — 본문은 그대로 생성
+                logger.warning(
+                    "weekly_generate: vacation fetch failed ym=%s err=%s",
+                    ym, exc,
+                )
+
+        # author_name: 설정 우선, 비면 client 캐시된 user.name
+        author_name = (
+            db_module.get_setting(conn, "report.author_name") or ""
+        ).strip()
+        if not author_name and getattr(client, "_user", None):
+            author_name = client._user.name or ""
+
         rows = weekly_module.build_weekly_table_rows(
             conn, week_iso=week_iso, preserve_manual_rows=preserve,
+            vacations=all_vacations, author_name=author_name,
         )
         updated_at = db_module.upsert_weekly_report(conn, week_iso, rows)
         return {"week_iso": week_iso, "rows": rows, "updated_at": updated_at}
@@ -855,6 +888,8 @@ def register_routes(app: FastAPI) -> None:
         "ongoing_schedule": "",
         # 주간업무보고 페이지의 📤 UpNote 저장 — 일일 노트북과 분리된 노트북 ID
         "upnote.weekly_notebook_id": "",
+        # 주간업무보고 휴가 행 표시명 (직급 포함 가능). 비면 client.user.name fallback.
+        "report.author_name": "",
     }
 
     @app.get("/api/settings")

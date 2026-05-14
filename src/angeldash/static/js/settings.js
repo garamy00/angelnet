@@ -8,6 +8,7 @@ const KEYS = {
   't-upnote-title': 'upnote.title_template',
   't-upnote-body': 'upnote.body_template',
   'holiday-exclude': 'misc.holiday_exclude_labels',  // 출근일로 취급할 공휴일 label
+  'report-author-name': 'report.author_name',        // 주간업무보고 휴가 행 표시명
 };
 // select / checkbox (값은 'true' / 'false' 문자열로 저장)
 const BOOL_KEYS = {

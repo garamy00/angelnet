@@ -3,6 +3,12 @@ import { initOngoingSchedule } from './ongoing_schedule.js';
 
 const COL_KEYS = ['last_week', 'this_week', 'next_week', 'note'];
 const COL_HEADERS = ['프로젝트', '지난주 한 일', '이번주 한 일/할 일', '다음주 할 일', '비고'];
+// 자동 생성되는 휴가 행. 사용자가 직접 옮기거나 영구 삭제할 수 없게 ▲▼/🗑 숨김.
+const VACATION_PROJECT_NAME = '휴가';
+
+function isVacationRow(row) {
+  return !!row && row.project_name === VACATION_PROJECT_NAME;
+}
 
 let currentWeek = new URLSearchParams(location.search).get('week') || isoWeek(new Date());
 let currentRows = [];
@@ -53,9 +59,23 @@ function renderRows() {
   }
   empty.hidden = true;
   wrap.hidden = false;
+  // 휴가 행이 있으면 일반 행의 마지막 idx 가 그 직전. ▼ 가 휴가 행을 넘어가지 않도록.
+  const vacIdx = currentRows.findIndex(isVacationRow);
+  const normalMaxIdx = vacIdx === -1 ? currentRows.length - 1 : vacIdx - 1;
   for (let i = 0; i < currentRows.length; i += 1) {
-    tbody.appendChild(renderRow(i));
+    tbody.appendChild(renderRow(i, normalMaxIdx));
   }
+}
+
+async function moveRow(idx, delta) {
+  // 일반 행끼리만 swap. 휴가 행과 자리바꿈 금지.
+  const target = idx + delta;
+  if (target < 0 || target >= currentRows.length) return;
+  if (isVacationRow(currentRows[target])) return;
+  const [item] = currentRows.splice(idx, 1);
+  currentRows.splice(target, 0, item);
+  await saveAll();
+  renderRows();
 }
 
 function autoResize(ta) {
@@ -63,24 +83,31 @@ function autoResize(ta) {
   ta.style.height = (ta.scrollHeight + 2) + 'px';
 }
 
-function renderRow(idx) {
+function renderRow(idx, normalMaxIdx) {
   const row = currentRows[idx];
+  const isVac = isVacationRow(row);
   const tr = document.createElement('tr');
+  if (isVac) tr.classList.add('row-vacation');
 
-  // 프로젝트명 input
+  // 프로젝트명 input — 휴가 행은 readonly (자동 관리)
   const tdName = document.createElement('td');
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.className = 'cell-project';
   nameInput.value = row.project_name || '';
-  nameInput.addEventListener('blur', () => {
-    currentRows[idx].project_name = nameInput.value;
-    saveAll();
-  });
+  if (isVac) {
+    nameInput.readOnly = true;
+    nameInput.title = '휴가 행은 자동 관리됩니다';
+  } else {
+    nameInput.addEventListener('blur', () => {
+      currentRows[idx].project_name = nameInput.value;
+      saveAll();
+    });
+  }
   tdName.appendChild(nameInput);
   tr.appendChild(tdName);
 
-  // 4개 텍스트 셀
+  // 4개 텍스트 셀 (편집은 일반/휴가 행 모두 가능 — 휴가 행은 다음 재생성 때 덮어쓰기)
   for (const key of COL_KEYS) {
     const td = document.createElement('td');
     const ta = document.createElement('textarea');
@@ -97,20 +124,44 @@ function renderRow(idx) {
     queueMicrotask(() => autoResize(ta));
   }
 
-  // 삭제 버튼
-  const tdDel = document.createElement('td');
-  const delBtn = document.createElement('button');
-  delBtn.className = 'row-del';
-  delBtn.textContent = '🗑';
-  delBtn.title = '이 행 삭제';
-  delBtn.addEventListener('click', async () => {
-    if (!confirm(`'${currentRows[idx].project_name || '(이름 없음)'}' 행을 삭제할까요?`)) return;
-    currentRows.splice(idx, 1);
-    await saveAll();
-    renderRows();
-  });
-  tdDel.appendChild(delBtn);
-  tr.appendChild(tdDel);
+  // 액션 td: 휴가 행은 '자동' 라벨, 일반 행은 ▲ ▼ 🗑
+  const tdActions = document.createElement('td');
+  tdActions.className = 'row-actions';
+  if (isVac) {
+    const lock = document.createElement('span');
+    lock.className = 'muted';
+    lock.textContent = '자동';
+    lock.title = '휴가 행은 재생성마다 자동 갱신됩니다';
+    tdActions.appendChild(lock);
+  } else {
+    const upBtn = document.createElement('button');
+    upBtn.className = 'row-move';
+    upBtn.textContent = '▲';
+    upBtn.title = '위로';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => moveRow(idx, -1));
+
+    const dnBtn = document.createElement('button');
+    dnBtn.className = 'row-move';
+    dnBtn.textContent = '▼';
+    dnBtn.title = '아래로';
+    dnBtn.disabled = idx >= normalMaxIdx;
+    dnBtn.addEventListener('click', () => moveRow(idx, +1));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'row-del';
+    delBtn.textContent = '🗑';
+    delBtn.title = '이 행 삭제';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`'${currentRows[idx].project_name || '(이름 없음)'}' 행을 삭제할까요?`)) return;
+      currentRows.splice(idx, 1);
+      await saveAll();
+      renderRows();
+    });
+
+    tdActions.append(upBtn, dnBtn, delBtn);
+  }
+  tr.appendChild(tdActions);
 
   return tr;
 }

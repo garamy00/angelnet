@@ -20,6 +20,23 @@ from typing import Any
 from . import db
 
 _FALLBACK_PROJECT = "(매핑 없음)"
+# 자동 생성되는 휴가 행의 프로젝트명. UI/재생성 로직이 이 이름으로 행을 식별한다.
+VACATION_PROJECT_NAME = "휴가"
+
+# 회사 시스템 휴가 type 코드 → 사용자 표시 라벨
+_VAC_TYPE_DISPLAY_LABEL = {
+    "연차": "연차",
+    "반차(오전)": "오전 반차",
+    "반차(오후)": "오후 반차",
+    "공가": "공가",
+    "공가(오전)": "오전 공가",
+    "공가(오후)": "오후 공가",
+    "경조사": "경조사",
+    "휴직": "휴직",
+}
+_VAC_AM_HALF_TYPES = {"반차(오전)", "공가(오전)"}
+_VAC_PM_HALF_TYPES = {"반차(오후)", "공가(오후)"}
+_DAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
 
 
 def _prev_week_iso(week_iso: str) -> str:
@@ -232,42 +249,179 @@ def _format_cell_text(entries: list[dict[str, Any]]) -> str:
     return "\n\n".join(chunks)
 
 
+# ─── 휴가 행 자동 생성 헬퍼 ─────────────────────────
+
+
+def _vac_label(vac_type: str) -> str:
+    """type 코드 → 표시 라벨. 모르는 type 은 원본 그대로."""
+    return _VAC_TYPE_DISPLAY_LABEL.get(vac_type, vac_type)
+
+
+def _half_suffix(vac_type: str) -> str:
+    """오전/오후 반차이면 ', 오전' / ', 오후', 종일은 ''."""
+    if vac_type in _VAC_AM_HALF_TYPES:
+        return ", 오전"
+    if vac_type in _VAC_PM_HALF_TYPES:
+        return ", 오후"
+    return ""
+
+
+def _vac_in_week(vacations: list[dict], week_iso: str) -> list[dict]:
+    """그 주(월~금)에 속한 휴가만 필터링하고 (date, type) 으로 정렬."""
+    year_s, w_s = week_iso.split("-W")
+    year, week = int(year_s), int(w_s)
+    monday = datetime.date.fromisocalendar(year, week, 1)
+    friday = monday + datetime.timedelta(days=4)
+    monday_iso = monday.isoformat()
+    friday_iso = friday.isoformat()
+    return sorted(
+        [v for v in vacations if monday_iso <= (v.get("date") or "") <= friday_iso],
+        key=lambda v: (v.get("date") or "", v.get("type") or ""),
+    )
+
+
+def _group_consecutive_dates(
+    dates: list[datetime.date],
+) -> list[list[datetime.date]]:
+    """정렬된 date 리스트를 연속 구간으로 묶는다."""
+    if not dates:
+        return []
+    groups: list[list[datetime.date]] = [[dates[0]]]
+    for d in dates[1:]:
+        if (d - groups[-1][-1]).days == 1:
+            groups[-1].append(d)
+        else:
+            groups.append([d])
+    return groups
+
+
+def _format_vacation_line(
+    vac_type: str,
+    dates: list[datetime.date],
+    author_name: str,
+) -> str:
+    """같은 type 의 연속 구간 하나를 한 줄로 포맷.
+
+    예 (반차/연차 모두 동일 규칙):
+        종일 단일: '   . 손대곤 부장(04/21, 화)'
+        종일 범위: '   . 손대곤 부장(02/02~06, 월~금)'
+        반차 단일: '   . 손대곤 부장(04/21, 화, 오후)'
+    author_name 이 비면 괄호 앞 빈 prefix.
+    """
+    start, end = dates[0], dates[-1]
+    half = _half_suffix(vac_type)
+    if start == end:
+        date_part = f"{start.month:02d}/{start.day:02d}"
+        day_part = _DAY_KR[start.weekday()]
+    else:
+        # 같은 달이면 'MM/DD~DD', 다른 달이면 'MM/DD~MM/DD'
+        if start.month == end.month:
+            date_part = f"{start.month:02d}/{start.day:02d}~{end.day:02d}"
+        else:
+            date_part = (
+                f"{start.month:02d}/{start.day:02d}~"
+                f"{end.month:02d}/{end.day:02d}"
+            )
+        day_part = f"{_DAY_KR[start.weekday()]}~{_DAY_KR[end.weekday()]}"
+
+    inside = f"{date_part}, {day_part}{half}"
+    return f"   . {author_name}({inside})" if author_name else f"   . ({inside})"
+
+
+def _format_vacation_cell(
+    vacations_in_week: list[dict],
+    *,
+    author_name: str,
+) -> str:
+    """그 주의 휴가를 셀 텍스트로. 비어있으면 빈 문자열.
+
+    형식:
+        *) 휴가
+         - {유형 라벨}
+           . {본인}(MM/DD, 요일[, 오전|오후])
+           . ...
+         - {다른 유형}
+           ...
+    """
+    if not vacations_in_week:
+        return ""
+
+    # type 별 그룹 (등장 순으로 출력 순서 고정)
+    by_type: dict[str, list[datetime.date]] = {}
+    order: list[str] = []
+    for v in vacations_in_week:
+        vac_type = v.get("type") or ""
+        try:
+            d = datetime.date.fromisoformat(v.get("date") or "")
+        except ValueError:
+            continue
+        if vac_type not in by_type:
+            by_type[vac_type] = []
+            order.append(vac_type)
+        by_type[vac_type].append(d)
+
+    lines: list[str] = ["*) 휴가"]
+    for vac_type in order:
+        groups = _group_consecutive_dates(sorted(by_type[vac_type]))
+        lines.append(f" - {_vac_label(vac_type)}")
+        for group in groups:
+            lines.append(_format_vacation_line(vac_type, group, author_name))
+    return "\n".join(lines)
+
+
 def build_weekly_table_rows(
     conn: sqlite3.Connection,
     *,
     week_iso: str,
     preserve_manual_rows: list[dict] | None = None,
+    vacations: list[dict] | None = None,
+    author_name: str = "",
 ) -> list[dict]:
     """주차별 4컬럼 표의 행 리스트 생성.
 
     last_week / this_week 는 daily entries 에서 자동 채움.
     next_week / note 는 preserve_manual_rows 가 주어지면 같은 project_name 행의
     것을 보존, 아니면 빈 문자열.
+
+    vacations 가 주어지면 그 안에서 지난주/이번주 휴가를 골라 마지막에
+    '휴가' 프로젝트 행을 자동 추가. 양쪽 모두 비어있으면 행을 만들지 않는다.
     """
     this_grouped = _entries_grouped_by_project(conn, week_iso=week_iso)
     last_grouped = _entries_grouped_by_project(
         conn, week_iso=_prev_week_iso(week_iso),
     )
 
-    # 프로젝트 순서: 지난주 → 이번주 등장 순으로 합집합 (안정적 ordering)
-    project_order: list[str] = []
+    # 자동 발견 프로젝트 순서 (지난주 → 이번주 등장 순)
+    auto_order: list[str] = []
     seen: set[str] = set()
     for grouped in (last_grouped, this_grouped):
         for proj in grouped.keys():
             if proj not in seen:
-                project_order.append(proj)
+                auto_order.append(proj)
                 seen.add(proj)
 
-    # 보존할 manual 값 lookup
+    # 사용자가 ▲▼ 로 정한 순서를 우선 — preserve_manual_rows 가 있으면 그 순서가 base.
+    # 자동 발견된 새 프로젝트는 그 뒤에 append. 휴가 행은 별도 처리하므로 여기서 제외.
+    manual_order: list[str] = []
+    manual_set: set[str] = set()
     manual_lookup: dict[str, dict[str, str]] = {}
     if preserve_manual_rows:
         for r in preserve_manual_rows:
             name = r.get("project_name", "")
-            if name:
-                manual_lookup[name] = {
-                    "next_week": r.get("next_week", "") or "",
-                    "note": r.get("note", "") or "",
-                }
+            if not name or name == VACATION_PROJECT_NAME:
+                continue
+            if name not in manual_set:
+                manual_order.append(name)
+                manual_set.add(name)
+            manual_lookup[name] = {
+                "next_week": r.get("next_week", "") or "",
+                "note": r.get("note", "") or "",
+            }
+
+    project_order: list[str] = list(manual_order)
+    for proj in auto_order:
+        if proj not in manual_set:
+            project_order.append(proj)
 
     out: list[dict] = []
     for proj in project_order:
@@ -278,6 +432,24 @@ def build_weekly_table_rows(
             "this_week": _format_cell_text(this_grouped.get(proj, [])),
             "next_week": manual["next_week"],
             "note": manual["note"],
+        })
+
+    # 휴가 행은 자동 생성 — 항상 마지막. 양쪽 셀 모두 비면 행 자체를 추가하지 않는다.
+    last_iso = _prev_week_iso(week_iso)
+    vacs = vacations or []
+    last_cell = _format_vacation_cell(
+        _vac_in_week(vacs, last_iso), author_name=author_name,
+    )
+    this_cell = _format_vacation_cell(
+        _vac_in_week(vacs, week_iso), author_name=author_name,
+    )
+    if last_cell or this_cell:
+        out.append({
+            "project_name": VACATION_PROJECT_NAME,
+            "last_week": last_cell,
+            "this_week": this_cell,
+            "next_week": "",
+            "note": "",
         })
     return out
 
