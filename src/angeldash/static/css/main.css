@@ -1062,6 +1062,23 @@ main.settings-form {
   margin: 20px 0 8px;
 }
 
+/* h2 직후 첫 element 와 ul/label 가 동일한 top spacing 을 갖도록 */
+.settings-panel > section > h2:first-child + ul.help-list,
+.settings-panel > section > h2:first-child + label,
+.settings-panel > section > h2:first-child + h3 {
+  margin-top: 12px;
+}
+
+/* 빈 preview pre 는 자리 차지 안 함 — 미리보기 누르기 전엔 hidden */
+.settings-form pre:empty {
+  display: none;
+}
+
+/* preview button row 통일 — h3 → textarea → button row → pre 의 spacing */
+.settings-form section > div {
+  margin: 6px 0 0;
+}
+
 /* scope 를 .settings-form 으로 제한 — 다른 페이지의 inline label 패턴 보호 */
 .settings-form label {
   display: block;
