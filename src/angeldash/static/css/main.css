@@ -1027,7 +1027,7 @@ main.settings-form {
   padding: 10px 16px;
   color: var(--color-muted);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;  /* active 와 동일 weight 로 고정 — bold 변화로 폭이 흔들리는 것 방지 */
   cursor: pointer;
   border-radius: 0;
 }
@@ -1037,7 +1037,6 @@ main.settings-form {
 .settings-tab.active {
   color: var(--color-accent);
   border-bottom-color: var(--color-accent);
-  font-weight: 600;
 }
 
 /* 4개 탭 panel — 동일한 chrome / spacing 보장 */
