@@ -156,6 +156,19 @@ saveBtn.addEventListener('click', async () => {
   }
 });
 
+// ─── 탭 토글 ───────────────────────────────────────
+for (const btn of document.querySelectorAll('.settings-tab')) {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    for (const t of document.querySelectorAll('.settings-tab')) {
+      t.classList.toggle('active', t === btn);
+    }
+    for (const p of document.querySelectorAll('.settings-panel')) {
+      p.hidden = p.dataset.panel !== target;
+    }
+  });
+}
+
 load();
 refreshEmailPasswordStatus();
 initHeader();

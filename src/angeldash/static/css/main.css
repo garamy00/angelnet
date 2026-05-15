@@ -1001,6 +1001,38 @@ table.monthly-grid tr.vac-row .task-col {
 }
 
 /* ─── settings 페이지 폼 ──────────────────────────── */
+/* 설정 페이지만 다시 가운데 정렬 + 좁게 (사용자 의도 — form 페이지 가독성) */
+main.settings-form {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+/* 탭 nav */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px;
+}
+.settings-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 0;
+}
+.settings-tab:hover {
+  color: var(--color-text);
+}
+.settings-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
 /* scope 를 .settings-form 으로 제한 — 다른 페이지의 inline label 패턴 보호 */
 .settings-form label {
   display: block;

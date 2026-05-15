@@ -22,171 +22,191 @@
     </div>
   </header>
   <main class="settings-form">
-    <section>
-      <h2>UpNote</h2>
-      <label>노트북 이름 — 일일/주간 노트 (기록용)
-        <input id="notebook-id" type="text" placeholder="### 일일 업무 보고 ###">
-      </label>
-      <label>노트북 이름 — 주간업무보고 (팀장 보고용)
-        <input id="weekly-notebook-id" type="text" placeholder="### 주간업무보고 ###">
-      </label>
-      <label>주간업무보고 노트 제목 템플릿
-        <input id="weekly-title-template" type="text"
-               placeholder="주간업무 보고[{{ yyyy }}.{{ mm }}.{{ ww_of_month }}주]">
-      </label>
-      <p class="muted">
-        UpNote 의 <code>note/new</code> 의 <code>notebook</code> 파라미터에 전달할 노트북 이름.
-        하위 노트북은 슬래시(<code>/</code>) 로 경로 표기 (예: <code>업무/2026</code>).
-        일일/주간 노트(상단)는 본인 기록용 — 일일업무보고 페이지의 🔄 UpNote 저장(주) 가 사용.
-        주간업무보고(하단)는 팀장 보고용 — 주간업무보고 페이지의 📤 UpNote 저장 이 사용.
-        비워두면 해당 액션 비활성화.<br>
-        주간 제목 변수: <code>{{ yyyy }}</code>, <code>{{ yy }}</code>,
-        <code>{{ mm }}</code>, <code>{{ ww }}</code> (ISO 주차),
-        <code>{{ ww_of_month }}</code> (월의 몇 번째 주),
-        <code>{{ week_start_mmdd }}</code>, <code>{{ week_end_mmdd }}</code>.
-      </p>
+    <nav class="settings-tabs">
+      <button class="settings-tab active" data-tab="upnote">📝 UpNote</button>
+      <button class="settings-tab" data-tab="template">📋 출력 템플릿</button>
+      <button class="settings-tab" data-tab="email">📧 주간보고 이메일</button>
+      <button class="settings-tab" data-tab="misc">⚙️ 기타</button>
+    </nav>
 
-      <label>본문을 코드 블록으로 감싸기
-        <input id="wrap-code" type="checkbox">
-      </label>
-      <p class="muted">
-        체크하면 본문을 <code>```</code> 로 감싸 markdown 자동 변환 (들여쓰기 제거, <code>*</code> → bullet, 자동 번호 등) 을
-        모두 비활성화합니다. plain text 형식을 정확히 보존하려면 체크.
-      </p>
-
-      <label>UpNote markdown 렌더링
-        <select id="upnote-markdown">
-          <option value="false">false (plain text 우선)</option>
-          <option value="true">true (markdown 렌더)</option>
-        </select>
-      </label>
-      <p class="muted">UpNote 의 <code>markdown</code> 파라미터. 일부 버전에서는 false 라도 자체 변환이 적용될 수 있으니, 결과가 어색하면 위 "코드 블록으로 감싸기" 도 체크하세요.</p>
-    </section>
-
-    <section>
-      <h2>출력 템플릿</h2>
-      <p class="muted">Jinja2 문법. <code>{{ entry.category }}</code>, <code>{{ entry.body }}</code>, <code>{{ yy }}</code>, <code>{{ ww }}</code>, <code>{{ days }}</code>, <code>{{ week_notes }}</code> 등.</p>
-
-      <h3>팀장 보고</h3>
-      <textarea id="t-team-report" rows="10"></textarea>
-      <div>
-        <button data-preview="team_report">미리보기</button>
-        <button data-reset="team_report.template">기본값 복원</button>
-      </div>
-      <pre id="preview-team-report" class="muted"></pre>
-
-      <h3>UpNote 제목</h3>
-      <textarea id="t-upnote-title" rows="2"></textarea>
-      <div>
-        <button data-preview="upnote_title">미리보기</button>
-        <button data-reset="upnote.title_template">기본값 복원</button>
-      </div>
-      <pre id="preview-upnote-title" class="muted"></pre>
-
-      <h3>UpNote 본문</h3>
-      <textarea id="t-upnote-body" rows="20"></textarea>
-      <div>
-        <button data-preview="upnote_body">미리보기</button>
-        <button data-reset="upnote.body_template">기본값 복원</button>
-      </div>
-      <pre id="preview-upnote-body" class="muted"></pre>
-    </section>
-
-    <section>
-      <h2>자동 '기타' 문구</h2>
-      <label>공휴일 중 출근일로 취급할 label
-        <input id="holiday-exclude" type="text" placeholder="가정의날, 회사창립일">
-      </label>
-      <p class="muted">콤마(,) 또는 줄바꿈으로 구분. 회사 시스템이 공휴일로 표시하지만 실제로는 출근하는 날 (단축 근무 등).</p>
-    </section>
-
-    <section>
-      <h2>주간업무보고</h2>
-      <label>본인 표시명 (휴가 행 등에 사용)
-        <input id="report-author-name" type="text" placeholder="홍길동 부장">
-      </label>
-      <p class="muted">
-        주간업무보고 표의 자동 휴가 행에 들어갈 이름. 직급을 포함해도 됩니다.
-        비워두면 회사 시스템 로그인 이름이 그대로 사용됩니다.
-      </p>
-
-      <h3>이메일 (SMTP)</h3>
-
-      <label class="inline-check">
-        <input id="email-enabled" type="checkbox">
-        <span>SMTP 발송 활성화</span>
-      </label>
-
-      <div class="form-grid-2">
-        <label>SMTP Host
-          <input id="email-smtp-host" type="text" placeholder="smtp.office365.com">
+    <!-- ─── UpNote 탭 ─────────────────────────────────── -->
+    <div class="settings-panel" data-panel="upnote">
+      <section>
+        <h2>UpNote</h2>
+        <label>노트북 이름 — 일일/주간 노트 (기록용)
+          <input id="notebook-id" type="text" placeholder="### 일일 업무 보고 ###">
         </label>
-        <label>Port
-          <input id="email-smtp-port" type="number" min="1" max="65535"
-                 placeholder="587">
+        <label>노트북 이름 — 주간업무보고 (팀장 보고용)
+          <input id="weekly-notebook-id" type="text" placeholder="### 주간업무보고 ###">
         </label>
-      </div>
-
-      <label class="inline-check">
-        <input id="email-smtp-tls" type="checkbox">
-        <span>STARTTLS (587 권장 / 465 면 끄기)</span>
-      </label>
-
-      <div class="form-grid-2">
-        <label>Username (인증)
-          <input id="email-username" type="text" placeholder="user@example.com">
+        <label>주간업무보고 노트 제목 템플릿
+          <input id="weekly-title-template" type="text"
+                 placeholder="주간업무 보고[{{ yyyy }}.{{ mm }}.{{ ww_of_month }}주]">
         </label>
-        <label>Password
-          <input id="email-password" type="password" autocomplete="new-password"
-                 placeholder="********">
+        <p class="muted">
+          UpNote 의 <code>note/new</code> 의 <code>notebook</code> 파라미터에 전달할 노트북 이름.
+          하위 노트북은 슬래시(<code>/</code>) 로 경로 표기 (예: <code>업무/2026</code>).
+          일일/주간 노트(상단)는 본인 기록용 — 일일업무보고 페이지의 🔄 UpNote 저장(주) 가 사용.
+          주간업무보고(하단)는 팀장 보고용 — 주간업무보고 페이지의 📤 UpNote 저장 이 사용.
+          비워두면 해당 액션 비활성화.<br>
+          주간 제목 변수: <code>{{ yyyy }}</code>, <code>{{ yy }}</code>,
+          <code>{{ mm }}</code>, <code>{{ ww }}</code> (ISO 주차),
+          <code>{{ ww_of_month }}</code> (월의 몇 번째 주),
+          <code>{{ week_start_mmdd }}</code>, <code>{{ week_end_mmdd }}</code>.
+        </p>
+
+        <label>본문을 코드 블록으로 감싸기
+          <input id="wrap-code" type="checkbox">
         </label>
-      </div>
-      <p class="muted">
-        Password 는 macOS Keychain (service=angeldash-email) 에 저장됩니다.
-        DB/git/백업에는 저장되지 않습니다.
-        <span id="email-password-status" class="small"></span>
-      </p>
+        <p class="muted">
+          체크하면 본문을 <code>```</code> 로 감싸 markdown 자동 변환 (들여쓰기 제거, <code>*</code> → bullet, 자동 번호 등) 을
+          모두 비활성화합니다. plain text 형식을 정확히 보존하려면 체크.
+        </p>
 
-      <div class="form-grid-2">
-        <label>From Address
-          <input id="email-from" type="text" placeholder="user@example.com">
+        <label>UpNote markdown 렌더링
+          <select id="upnote-markdown">
+            <option value="false">false (plain text 우선)</option>
+            <option value="true">true (markdown 렌더)</option>
+          </select>
         </label>
-        <label>받는사람 (To, 콤마 구분)
-          <input id="email-to" type="text" placeholder="manager@example.com">
+        <p class="muted">UpNote 의 <code>markdown</code> 파라미터. 일부 버전에서는 false 라도 자체 변환이 적용될 수 있으니, 결과가 어색하면 위 "코드 블록으로 감싸기" 도 체크하세요.</p>
+      </section>
+    </div>
+
+    <!-- ─── 출력 템플릿 탭 ─────────────────────────────── -->
+    <div class="settings-panel" data-panel="template" hidden>
+      <section>
+        <h2>출력 템플릿</h2>
+        <p class="muted">Jinja2 문법. <code>{{ entry.category }}</code>, <code>{{ entry.body }}</code>, <code>{{ yy }}</code>, <code>{{ ww }}</code>, <code>{{ days }}</code>, <code>{{ week_notes }}</code> 등.</p>
+
+        <h3>팀장 보고</h3>
+        <textarea id="t-team-report" rows="10"></textarea>
+        <div>
+          <button data-preview="team_report">미리보기</button>
+          <button data-reset="team_report.template">기본값 복원</button>
+        </div>
+        <pre id="preview-team-report" class="muted"></pre>
+
+        <h3>UpNote 제목</h3>
+        <textarea id="t-upnote-title" rows="2"></textarea>
+        <div>
+          <button data-preview="upnote_title">미리보기</button>
+          <button data-reset="upnote.title_template">기본값 복원</button>
+        </div>
+        <pre id="preview-upnote-title" class="muted"></pre>
+
+        <h3>UpNote 본문</h3>
+        <textarea id="t-upnote-body" rows="20"></textarea>
+        <div>
+          <button data-preview="upnote_body">미리보기</button>
+          <button data-reset="upnote.body_template">기본값 복원</button>
+        </div>
+        <pre id="preview-upnote-body" class="muted"></pre>
+      </section>
+    </div>
+
+    <!-- ─── 주간보고 이메일 탭 ─────────────────────────── -->
+    <div class="settings-panel" data-panel="email" hidden>
+      <section>
+        <h2>주간업무보고 이메일</h2>
+
+        <label>본인 표시명 (휴가 행 등에 사용)
+          <input id="report-author-name" type="text" placeholder="홍길동 부장">
         </label>
-      </div>
+        <p class="muted">
+          주간업무보고 표의 자동 휴가 행에 들어갈 이름. 직급을 포함해도 됩니다.
+          비워두면 회사 시스템 로그인 이름이 그대로 사용됩니다.
+        </p>
 
-      <label>참조 (Cc, 콤마 구분)
-        <input id="email-cc" type="text" placeholder="team@example.com">
-      </label>
+        <h3>이메일 (SMTP)</h3>
 
-      <div class="actions-bar">
-        <button id="email-test" type="button">📡 SMTP Test</button>
-        <span id="email-test-result" class="muted small"></span>
-      </div>
+        <label class="inline-check">
+          <input id="email-enabled" type="checkbox">
+          <span>SMTP 발송 활성화</span>
+        </label>
 
-      <label>제목 템플릿
-        <input id="email-subject" type="text"
-               placeholder="주간업무보고 ({{ yy }}년 {{ ww }}주차)">
-      </label>
-      <label>본문 — 표 위 인사말
-        <textarea id="email-greeting" rows="3"
-                  placeholder="안녕하세요 홍길동입니다.&#10;&#10;이번주 주간 업무 보고 드립니다."></textarea>
-      </label>
-      <label>본문 — 표 아래 마무리
-        <textarea id="email-closing" rows="2"
-                  placeholder="그럼…수고하십시오&#10;고맙습니다."></textarea>
-      </label>
-      <label>서명 (HTML, Outlook 서명을 복사해서 붙여넣기)
-        <textarea id="email-signature" rows="4"
-                  placeholder="<p>홍길동 / 팀명<br>회사명</p>"></textarea>
-      </label>
-      <p class="muted">
-        직접 SMTP 발송이라 Outlook 의 자동 서명은 적용되지 않습니다.
-        Outlook 서명 영역을 HTML 로 복사해서 위 textarea 에 한 번 입력해두면
-        본문 끝(마무리 다음)에 자동 첨부됩니다.
-      </p>
-    </section>
+        <div class="form-grid-2">
+          <label>SMTP Host
+            <input id="email-smtp-host" type="text" placeholder="smtp.office365.com">
+          </label>
+          <label>Port
+            <input id="email-smtp-port" type="number" min="1" max="65535"
+                   placeholder="587">
+          </label>
+        </div>
+
+        <label class="inline-check">
+          <input id="email-smtp-tls" type="checkbox">
+          <span>STARTTLS (587 권장 / 465 면 끄기)</span>
+        </label>
+
+        <div class="form-grid-2">
+          <label>Username (인증)
+            <input id="email-username" type="text" placeholder="user@example.com">
+          </label>
+          <label>Password
+            <input id="email-password" type="password" autocomplete="new-password"
+                   placeholder="********">
+          </label>
+        </div>
+        <p class="muted">
+          Password 는 macOS Keychain (service=angeldash-email) 에 저장됩니다.
+          DB/git/백업에는 저장되지 않습니다.
+          <span id="email-password-status" class="small"></span>
+        </p>
+
+        <div class="form-grid-2">
+          <label>From Address
+            <input id="email-from" type="text" placeholder="user@example.com">
+          </label>
+          <label>받는사람 (To, 콤마 구분)
+            <input id="email-to" type="text" placeholder="manager@example.com">
+          </label>
+        </div>
+
+        <label>참조 (Cc, 콤마 구분)
+          <input id="email-cc" type="text" placeholder="team@example.com">
+        </label>
+
+        <div class="actions-bar">
+          <button id="email-test" type="button">📡 SMTP Test</button>
+          <span id="email-test-result" class="muted small"></span>
+        </div>
+
+        <label>제목 템플릿
+          <input id="email-subject" type="text"
+                 placeholder="주간업무보고 ({{ yy }}년 {{ ww }}주차)">
+        </label>
+        <label>본문 — 표 위 인사말
+          <textarea id="email-greeting" rows="3"
+                    placeholder="안녕하세요 홍길동입니다.&#10;&#10;이번주 주간 업무 보고 드립니다."></textarea>
+        </label>
+        <label>본문 — 표 아래 마무리
+          <textarea id="email-closing" rows="2"
+                    placeholder="그럼…수고하십시오&#10;고맙습니다."></textarea>
+        </label>
+        <label>서명 (HTML, Outlook 서명을 복사해서 붙여넣기)
+          <textarea id="email-signature" rows="4"
+                    placeholder="<p>홍길동 / 팀명<br>회사명</p>"></textarea>
+        </label>
+        <p class="muted">
+          직접 SMTP 발송이라 Outlook 의 자동 서명은 적용되지 않습니다.
+          Outlook 서명 영역을 HTML 로 복사해서 위 textarea 에 한 번 입력해두면
+          본문 끝(마무리 다음)에 자동 첨부됩니다.
+        </p>
+      </section>
+    </div>
+
+    <!-- ─── 기타 탭 ──────────────────────────────────── -->
+    <div class="settings-panel" data-panel="misc" hidden>
+      <section>
+        <h2>자동 '기타' 문구</h2>
+        <label>공휴일 중 출근일로 취급할 label
+          <input id="holiday-exclude" type="text" placeholder="가정의날, 회사창립일">
+        </label>
+        <p class="muted">콤마(,) 또는 줄바꿈으로 구분. 회사 시스템이 공휴일로 표시하지만 실제로는 출근하는 날 (단축 근무 등).</p>
+      </section>
+    </div>
 
     <section class="actions-bar">
       <button class="primary" id="save">저장</button>
