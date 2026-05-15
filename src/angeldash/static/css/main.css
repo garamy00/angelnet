@@ -1112,35 +1112,6 @@ table.monthly-grid tr.vac-row .task-col {
   opacity: 0.3;
   cursor: not-allowed;
 }
-/* 행 높이 조절 handle — row-actions td 안 마지막 자식. ≡ 모양 */
-.weekly-table .row-resize-handle {
-  margin-top: 6px;
-  height: 8px;
-  width: 100%;
-  cursor: row-resize;
-  background-image: linear-gradient(
-    to bottom,
-    transparent 30%,
-    var(--color-border) 30% 45%,
-    transparent 45% 55%,
-    var(--color-border) 55% 70%,
-    transparent 70%
-  );
-  border-radius: 2px;
-  opacity: 0.5;
-}
-.weekly-table .row-resize-handle:hover {
-  opacity: 1;
-  background-image: linear-gradient(
-    to bottom,
-    transparent 30%,
-    var(--color-accent) 30% 45%,
-    transparent 45% 55%,
-    var(--color-accent) 55% 70%,
-    transparent 70%
-  );
-}
-
 .weekly-table .row-vacation .cell-project {
   color: var(--color-muted);
   font-style: italic;

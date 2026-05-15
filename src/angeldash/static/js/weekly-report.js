@@ -100,18 +100,39 @@ async function moveRow(idx, delta) {
 // 그러나 사용자가 행 별 drag handle 로 명시 height 를 잡았을 때는 그 값을 유지.
 
 function attachRowHeightDrag(tr) {
-  // tr 마지막 td(.row-actions) 안에 ≡ grip 추가. mousedown 후 drag 로 그 행의
-  // 모든 cell-text div 의 min-height 를 동일하게 갱신.
-  const actions = tr.querySelector('.row-actions');
-  if (!actions) return;
-  const handle = document.createElement('div');
-  handle.className = 'row-resize-handle';
-  handle.title = '드래그해서 행 높이 조절';
-  actions.appendChild(handle);
+  // 행 하단 경계 hotspot — 별도 핸들 없이 행 bottom 5px 안에 마우스가 들어오면
+  // cursor 가 row-resize 로 바뀌고, 거기서 mousedown 하면 그 행의 모든
+  // cell-text 의 min-height 를 drag 양만큼 갱신.
+  const HOTSPOT_PX = 5;
+  let dragging = false;
 
-  handle.addEventListener('mousedown', (ev) => {
+  function inHotspot(clientY) {
+    const rect = tr.getBoundingClientRect();
+    const fromBottom = rect.bottom - clientY;
+    return fromBottom >= 0 && fromBottom <= HOTSPOT_PX;
+  }
+
+  function setCursor(active) {
+    const v = active ? 'row-resize' : '';
+    tr.style.cursor = v;
+    tr.querySelectorAll('.cell-text, .cell-project').forEach((c) => {
+      c.style.cursor = v;
+    });
+  }
+
+  tr.addEventListener('mousemove', (ev) => {
+    if (dragging) return;
+    setCursor(inHotspot(ev.clientY));
+  });
+  tr.addEventListener('mouseleave', () => {
+    if (!dragging) setCursor(false);
+  });
+
+  tr.addEventListener('mousedown', (ev) => {
+    if (!inHotspot(ev.clientY)) return;
     ev.preventDefault();
     ev.stopPropagation();
+    dragging = true;
     const startY = ev.clientY;
     const startHeight = tr.getBoundingClientRect().height;
     document.body.style.cursor = 'row-resize';
@@ -124,10 +145,12 @@ function attachRowHeightDrag(tr) {
       });
     }
     function onUp() {
+      dragging = false;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      setCursor(false);
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
