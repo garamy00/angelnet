@@ -1043,47 +1043,23 @@ main.settings-form {
 /* 4개 탭 panel — 동일한 chrome / spacing 보장 */
 .settings-panel {
   display: block;
-  width: 100%;
 }
 .settings-panel[hidden] { display: none; }
-
-/* panel > section: 명시 width/padding 으로 panel 마다 동일 박스 크기 보장 */
 .settings-panel > section {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;          /* main section 의 margin-bottom 16px 제거 */
-  padding: 20px 24px; /* 모든 탭 동일한 inner padding */
+  /* main section 기본 chrome 을 그대로 받음. 첫 자식 spacing 만 통일. */
+  margin-bottom: 0;
 }
-
-/* 첫/끝 자식 spacing 통일 — 콘텐츠 위/아래 빈 공간이 panel 마다 같게 */
 .settings-panel > section > h2:first-child,
 .settings-panel > section > h3:first-of-type {
   margin-top: 0;
 }
-.settings-panel > section > *:last-child {
-  margin-bottom: 0;
-}
-
-/* h3 subsection (출력 템플릿/이메일 안 sub-heading) 간 spacing 통일 */
-.settings-panel > section h3 {
-  margin: 20px 0 8px;
-}
-
-/* h2 직후 첫 element 와 ul/label 가 동일한 top spacing 을 갖도록 */
-.settings-panel > section > h2:first-child + ul.help-list,
-.settings-panel > section > h2:first-child + label,
-.settings-panel > section > h2:first-child + h3 {
+.settings-panel > section > label:first-of-type,
+.settings-panel > section > .inline-check:first-of-type {
   margin-top: 12px;
 }
-
-/* 빈 preview pre 는 자리 차지 안 함 — 미리보기 누르기 전엔 hidden */
-.settings-form pre:empty {
-  display: none;
-}
-
-/* preview button row 통일 — h3 → textarea → button row → pre 의 spacing */
-.settings-form section > div {
-  margin: 6px 0 0;
+/* 각 탭 안 마지막 element 의 bottom margin 일관 */
+.settings-panel > section > *:last-child {
+  margin-bottom: 0;
 }
 
 /* scope 를 .settings-form 으로 제한 — 다른 페이지의 inline label 패턴 보호 */
