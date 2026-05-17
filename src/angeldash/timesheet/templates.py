@@ -38,7 +38,9 @@ DEFAULT_TEAM_REPORT = """\
 
 
 # UpNote 노트 제목 — 주 단위.
-DEFAULT_UPNOTE_TITLE = "{{ yy }}년 W{{ ww }} ({{ week_start_mmdd }} ~ {{ week_end_mmdd }})"
+DEFAULT_UPNOTE_TITLE = (
+    "{{ yy }}년 W{{ ww }} ({{ week_start_mmdd }} ~ {{ week_end_mmdd }})"
+)
 
 
 # UpNote 노트 본문 — 그 주의 모든 날짜 + 자유 메모(있을 때).

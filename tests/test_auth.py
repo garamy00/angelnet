@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from angeldash.auth import (
+from angeldash._common.auth import (
     KEYCHAIN_SERVICE,
     KeychainStore,
     TokenCache,

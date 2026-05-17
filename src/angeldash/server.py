@@ -6,21 +6,19 @@ lifespan 안에서 두 client(AngelNetClient, TimesheetClient) 모두 login.
 
 from __future__ import annotations
 
-import datetime
 import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth import KeychainStore
-from .client import AngelNetClient
-from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
-from .models import Reservation, ReservationCreate, User
-from .rooms import ROOMS, list_rooms_on_floor
+from ._common.auth import KeychainStore
+from ._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
+from .rooms import routes as rooms_routes
+from .rooms.client import AngelNetClient
 from .timesheet import db as ts_db
 from .timesheet import routes as ts_routes
 from .timesheet.client import TimesheetClient
@@ -28,16 +26,6 @@ from .timesheet.client import TimesheetClient
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
-
-
-def get_client() -> AngelNetClient:
-    """의존성 주입 placeholder. lifespan 또는 테스트가 dependency_overrides 로 교체."""
-    raise RuntimeError("client not initialized")
-
-
-def get_password() -> str:
-    """의존성 주입 placeholder. lifespan 또는 테스트가 dependency_overrides 로 교체."""
-    raise RuntimeError("password not initialized")
 
 
 def build_app(
@@ -79,10 +67,11 @@ def build_app(
         # 사용자 DB 에 과거 DEFAULT 가 그대로 저장돼 있으면 (= 미커스텀) 삭제하여
         # 코드의 새 DEFAULT 가 적용되도록 한다.
         from .timesheet.templates import OBSOLETE_DEFAULTS
+
         ts_db.cleanup_obsolete_default_settings(conn, OBSOLETE_DEFAULTS)
 
-        app.dependency_overrides[get_client] = lambda: rooms_client
-        app.dependency_overrides[get_password] = lambda: password
+        app.dependency_overrides[rooms_routes.get_client] = lambda: rooms_client
+        app.dependency_overrides[rooms_routes.get_password] = lambda: password
         app.dependency_overrides[ts_routes.get_client] = lambda: ts_client
         app.dependency_overrides[ts_routes.get_password] = lambda: password
         app.dependency_overrides[ts_routes.get_conn] = lambda: conn
@@ -96,60 +85,8 @@ def build_app(
 
     app = FastAPI(title="AngelDash — 통합 대시보드", lifespan=lifespan)
 
-    # lifespan 에서 이미 login 호출됨. 여기서는 Spring 세션 캐시 히트로
-    # 실제 네트워크 호출 없이 User 정보만 반환된다.
-    @app.get("/api/me", response_model=User)
-    async def me(
-        client: AngelNetClient = Depends(get_client),
-        password: str = Depends(get_password),
-    ) -> User:
-        return await client.login(password)
-
-    @app.get("/api/rooms")
-    async def rooms(floor: int | None = Query(default=None)) -> list[dict]:
-        if floor is not None:
-            items = list_rooms_on_floor(floor)
-        else:
-            # ID 숫자 기준으로 정렬해 응답 순서를 결정적으로 유지
-            items = sorted(ROOMS.values(), key=lambda r: int(r.id))
-        return [{"id": r.id, "name": r.name, "floor": r.floor} for r in items]
-
-    @app.get("/api/reservations", response_model=list[Reservation])
-    async def get_reservations(
-        start: str = Query(..., description="YYYY-MM-DD"),
-        end: str = Query(..., description="YYYY-MM-DD"),
-        room_id: str | None = Query(default=None),
-        client: AngelNetClient = Depends(get_client),
-    ) -> list[Reservation]:
-        return await client.list_reservations(start, end, room_id=room_id)
-
-    @app.post("/api/reservations", status_code=201)
-    async def create_reservation(
-        payload: ReservationCreate,
-        client: AngelNetClient = Depends(get_client),
-        password: str = Depends(get_password),
-    ) -> dict:
-        event_id = await client.create_reservation(password, payload)
-        return {"id": event_id}
-
-    @app.delete("/api/reservations/{event_id}", status_code=204)
-    async def delete_reservation(
-        event_id: int,
-        event_date: str = Query(..., description="원본 예약일 YYYY-MM-DD"),
-        client: AngelNetClient = Depends(get_client),
-        password: str = Depends(get_password),
-    ) -> None:
-        # 라우터 경계에서 외부 입력 형식 검증
-        try:
-            datetime.date.fromisoformat(event_date)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=422, detail="event_date must be YYYY-MM-DD"
-            ) from exc
-
-        await client.delete_reservation(
-            password, event_id=event_id, event_date=event_date
-        )
+    # 회의실 도메인 라우트 등록
+    rooms_routes.register_routes(app)
 
     # 타임시트 / 보고서 / 프로젝트 / 로그 / 설정 라우트 등록
     ts_routes.register_routes(app)
@@ -161,6 +98,10 @@ def build_app(
     async def index() -> FileResponse:
         # 기본 페이지: 일일업무보고
         return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
+
+    @app.get("/weekly-report.html")
+    async def weekly_report_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "weekly-report.html", headers=_NO_CACHE)
 
     # 통합 nav 에서 가리키는 보조 페이지들
     @app.get("/rooms.html")

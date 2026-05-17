@@ -10,8 +10,10 @@ from urllib.parse import urlencode
 
 import httpx
 
-from .errors import AngelNetError, ApiError, AuthError, BotBlockedError
-from .models import Reservation, ReservationCreate, User
+from .._common.errors import AngelNetError, ApiError, AuthError, BotBlockedError
+from .._common.http_relogin import AutoReloginHttp
+from .._common.models import User
+from .models import Reservation, ReservationCreate
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,9 @@ SPRING_BASE = "https://timesheet.uangel.com/times/application/meeting_room/api"
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X)"
 HTTP_TIMEOUT = 15.0
 BOT_BLOCK_MARKER = "Automated requests are not allowed"
-SESSION_TTL = 24 * 3600  # 24h
+# _user 캐시의 절대 만료 — AutoReloginHttp 의 idle 기반 사전 재로그인이
+# 1차 보호망이라 길어도 OK. 안전을 위해 1시간으로 유지.
+SESSION_TTL = 60 * 60  # 1시간
 
 
 def _is_bot_blocked(payload: Any) -> bool:
@@ -50,15 +54,40 @@ class AngelNetClient:
         self._user: User | None = None
         self._session_ready = False
         self._session_expires = 0.0
-        self._http = httpx.AsyncClient(
+        # 자동 재로그인 시 사용할 password 캐시. 최초 로그인 성공 시에만 채워짐.
+        self._password: str | None = None
+        # 만료 감지 + 1회 재시도 래퍼로 모든 HTTP 호출을 보낸다.
+        raw_http = httpx.AsyncClient(
             verify=False,
             timeout=HTTP_TIMEOUT,
             headers={"User-Agent": USER_AGENT},
+        )
+        self._http = AutoReloginHttp(
+            raw_http,
+            can_refresh=lambda: self._password is not None,
+            refresh=self._refresh_session,
         )
 
     async def close(self) -> None:
         """HTTP 클라이언트를 닫는다."""
         await self._http.aclose()
+
+    async def _refresh_session(self) -> None:
+        """만료 감지 시 호출되는 재로그인 훅. 캐시 무효화 후 login 재실행."""
+        if self._password is None:
+            raise AuthError("cannot refresh session without cached password")
+        self._session_ready = False
+        self._session_expires = 0.0
+        self._user = None
+        await self.login(self._password)
+
+    async def force_relogin(self) -> None:
+        """라우트가 직접 호출할 수 있는 강제 재로그인.
+
+        AutoReloginHttp 가 못 잡는 만료 응답 (200 + 빈 데이터 등) 케이스에서
+        라우트가 ApiError 를 catch 한 뒤 이 함수로 명시적 재로그인 후 재시도한다.
+        """
+        await self._refresh_session()
 
     # ─── 인증 ────────────────────────────────────────────
 
@@ -131,6 +160,8 @@ class AngelNetClient:
         )
         self._session_ready = True
         self._session_expires = time.time() + SESSION_TTL
+        # 성공한 password 만 캐시 → 첫 로그인 실패는 자동 재시도 트리거하지 않음.
+        self._password = password
         logger.info("Spring session established for user=%s", self.user_id)
         return self._user
 

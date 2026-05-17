@@ -71,17 +71,27 @@ def _day_obj(date_str: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _week_globals(week_iso: str) -> dict[str, Any]:
-    """{yy, ww, week_start, week_end, week_start_mmdd, week_end_mmdd, week_label}."""
+    """주차 관련 ctx 변수.
+
+    포함: yy, yyyy, ww (ISO 주차), mm (월요일 기준 월),
+          ww_of_month (월의 몇 번째 주), week_start/end, week_start_mmdd 등.
+
+    ww_of_month 는 월요일의 일자 기준 — 1~7일은 1주, 8~14일은 2주, ...
+    """
     year_str, w_str = week_iso.split("-W")
     year = int(year_str)
     week = int(w_str)
     # ISO 주는 월요일~일요일, 우리는 월~금만 다룬다 (출력에 영향 없음)
     monday = datetime.date.fromisocalendar(year, week, 1)
     friday = monday + datetime.timedelta(days=4)
+    # 월의 몇 번째 주 — 월요일의 day 기준. 1주차 = 그 달의 첫 월~7일.
+    week_of_month = (monday.day - 1) // 7 + 1
     return {
         "yy": f"{year % 100:02d}",
         "yyyy": str(year),
         "ww": f"{week:02d}",
+        "mm": f"{monday.month:02d}",
+        "ww_of_month": str(week_of_month),
         "week_iso": week_iso,
         "week_start": monday.isoformat(),
         "week_end": friday.isoformat(),
@@ -110,7 +120,7 @@ def build_week_context(
     days = []
     for d in week:
         if not d["entries"]:
-            # 빈 날도 meta 가 있을 수 있지만 정책: entries 가 비면 day 자체 제외 (기존 동작)
+            # 빈 날에 meta 가 있어도 정책상 entries 비면 day 자체 제외 (기존 동작)
             continue
         meta = db.get_daily_meta(conn, d["date"])
         day_obj = _day_obj(d["date"], d["entries"])
@@ -169,7 +179,7 @@ def build_team_report_context(
                 entries.append(_entry_dict({**e, "date": day["date"]}))
         target_label = "이번 주 전체"
         globals_ = _week_globals(week_iso)
-        # 주 단위: team-report 는 보통 일일 단위. 주 단위에서는 source_commit/misc_note 미사용.
+        # team-report 는 보통 일일 단위 — 주 단위에선 source_commit/misc_note 미사용.
         source_commit = "none"
         misc_note = ""
 
@@ -178,7 +188,9 @@ def build_team_report_context(
         "entries": entries,
         "target_label": target_label,
         "source_commit": source_commit,
-        "source_commit_label": db.SOURCE_COMMIT_LABELS.get(source_commit, source_commit),
+        "source_commit_label": db.SOURCE_COMMIT_LABELS.get(
+            source_commit, source_commit,
+        ),
         "misc_note": misc_note,
     }
 

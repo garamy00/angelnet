@@ -20,7 +20,7 @@ def conn() -> Generator[sqlite3.Connection, None, None]:
     운영 connect() 와 동일하게 foreign_keys PRAGMA 를 활성화하여
     테스트가 실제 운영 환경의 제약을 그대로 시뮬레이션하도록 한다.
     """
-    # check_same_thread=False: async 핸들러가 다른 스레드에서 connection 을 사용할 수 있도록 허용
+    # check_same_thread=False: async 핸들러가 다른 스레드에서 connection 사용 허용
     c = sqlite3.connect(":memory:", check_same_thread=False)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
@@ -47,12 +47,16 @@ def test_app(conn: sqlite3.Connection, mock_client: AsyncMock):
     회의실(get_client/get_password in angeldash.server) 도 같은 mock_client 로 override
     해두면 /api/me (회의실측 핸들러) 도 테스트 가능. mock_client.login 이 양쪽 호환.
     """
+    from angeldash.rooms.routes import get_client as rooms_get_client
+    from angeldash.rooms.routes import get_password as shared_get_password
     from angeldash.server import build_app
-    from angeldash.server import get_client as rooms_get_client
-    from angeldash.server import get_password as shared_get_password
     from angeldash.timesheet.routes import (
         get_client as ts_get_client,
+    )
+    from angeldash.timesheet.routes import (
         get_conn as ts_get_conn,
+    )
+    from angeldash.timesheet.routes import (
         get_password as ts_get_password,
     )
 

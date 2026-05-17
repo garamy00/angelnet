@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>주간업무보고 — AngelDash</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/"><i data-lucide="calendar-days"></i> 일일업무보고</a>
+      <a href="/weekly-report.html" class="active"><i data-lucide="bar-chart-3"></i> 주간업무보고</a>
+      <a href="/projects.html"><i data-lucide="folder"></i> 프로젝트</a>
+      <a href="/rooms.html"><i data-lucide="calendar"></i> 회의실예약</a>
+      <a href="/vacation.html"><i data-lucide="tent"></i> 휴가조회</a>
+      <a href="/logs.html"><i data-lucide="clipboard-list"></i> 로그</a>
+      <a href="/settings.html"><i data-lucide="settings"></i> 설정</a>
+    </nav>
+    <div class="header-right">
+      <span id="user-name" class="muted">로딩...</span>
+      <button id="btn-refresh" title="새로고침"><i data-lucide="refresh-cw"></i></button>
+    </div>
+  </header>
+  <main class="with-sidebar">
+    <aside class="week-sidebar">
+      <div class="week-sidebar-header"><i data-lucide="bar-chart-3"></i>  저장된 주간업무보고</div>
+      <div id="week-sidebar-list" class="week-sidebar-list">
+        <div class="muted">로딩…</div>
+      </div>
+    </aside>
+    <div class="main-content">
+    <details id="ongoing-schedule">
+      <summary>
+        <span><i data-lucide="pin"></i> 진행중인 일정</span>
+        <button id="btn-copy-schedule" title="전체 텍스트를 클립보드로 복사"><i data-lucide="clipboard-list"></i> 복사</button>
+      </summary>
+      <textarea id="ongoing-schedule-text"
+                placeholder="월간/주간 계획, 차주 예정 등 자유 형식. 일일/주간 보고에 복사해 쓰세요."></textarea>
+    </details>
+
+    <section class="week-header">
+      <button id="prev-week">◀ 이전 주</button>
+      <span id="week-label">로딩…</span>
+      <button id="this-week">이번 주</button>
+      <button id="next-week">다음 주 ▶</button>
+      <span class="spacer"></span>
+      <button id="btn-preview-email" title="이메일 본문 미리보기"><i data-lucide="mail"></i> 이메일 미리보기</button>
+      <button id="btn-send-email" class="primary"
+              title="기본 메일 클라이언트를 열어 보내기 (Outlook)"><i data-lucide="mail"></i> 이메일 보내기</button>
+      <button id="btn-upnote-weekly" title="UpNote 의 주간업무보고 노트북에 저장"><i data-lucide="send"></i> UpNote 저장</button>
+      <button id="btn-notion-weekly" title="Notion 주간보고 DB 에 저장 (중복 시 업데이트)"><i data-lucide="refresh-cw"></i> Notion 저장</button>
+    </section>
+
+    <!-- 미리보기 모달 — JS 가 텍스트 채우고 hidden 토글 -->
+    <div id="preview-modal" class="modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel">
+        <div class="modal-header">
+          <strong id="preview-modal-title">미리보기</strong>
+          <button id="preview-modal-close" class="modal-close" title="닫기">×</button>
+        </div>
+        <div id="preview-modal-body" class="modal-body"></div>
+        <div class="modal-actions">
+          <button id="preview-modal-copy" class="primary"><i data-lucide="clipboard-list"></i> 클립보드에 복사</button>
+        </div>
+      </div>
+    </div>
+
+    <section id="weekly-empty" hidden>
+      <p class="muted">이 주의 보고서가 아직 없습니다.</p>
+      <button class="primary" id="btn-generate-initial"><i data-lucide="download"></i> daily entries 에서 생성</button>
+    </section>
+
+    <section id="weekly-table-wrap">
+      <table id="weekly-table" class="weekly-table resizable-table">
+        <colgroup>
+          <col style="width: 160px">
+          <col>
+          <col>
+          <col>
+          <col>
+          <col style="width: 90px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>프로젝트</th>
+            <th>지난주 한 일</th>
+            <th>이번주 한 일/할 일</th>
+            <th>다음주 할 일</th>
+            <th>비고</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="weekly-rows"></tbody>
+      </table>
+      <div class="weekly-actions">
+        <button id="btn-add-row">+ 행 추가</button>
+        <button id="btn-regenerate" title="last_week/this_week 만 다시 자동 채움 (다음주/비고 보존)"><i data-lucide="refresh-cw"></i> 재생성</button>
+      </div>
+    </section>
+    </div>
+  </main>
+  <script type="module" src="/static/js/weekly-report.js"></script>
+</body>
+</html>

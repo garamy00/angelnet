@@ -4,17 +4,23 @@
   <meta charset="utf-8">
   <title>휴가조회 — AngelDash</title>
   <link rel="stylesheet" href="/static/css/main.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <header>
     <nav>
-      <a href="/">📅 일일업무보고</a>
-      <a href="/projects.html">🗂 프로젝트</a>
-      <a href="/rooms.html">🗓 회의실예약</a>
-      <a href="/vacation.html" class="active">🏖 휴가조회</a>
-      <a href="/logs.html">📋 로그</a>
-      <a href="/settings.html">⚙️ 설정</a>
+      <a href="/"><i data-lucide="calendar-days"></i> 일일업무보고</a>
+      <a href="/weekly-report.html"><i data-lucide="bar-chart-3"></i> 주간업무보고</a>
+      <a href="/projects.html"><i data-lucide="folder"></i> 프로젝트</a>
+      <a href="/rooms.html"><i data-lucide="calendar"></i> 회의실예약</a>
+      <a href="/vacation.html" class="active"><i data-lucide="tent"></i> 휴가조회</a>
+      <a href="/logs.html"><i data-lucide="clipboard-list"></i> 로그</a>
+      <a href="/settings.html"><i data-lucide="settings"></i> 설정</a>
     </nav>
+    <div class="header-right">
+      <span id="user-name" class="muted">로딩...</span>
+      <button id="btn-refresh" title="새로고침"><i data-lucide="refresh-cw"></i></button>
+    </div>
   </header>
   <main>
     <section>
@@ -29,12 +35,6 @@
            target="_blank" rel="noopener noreferrer"
            title="회사 타임시트의 휴가 등록 페이지를 새 탭으로 엽니다">
           ＋ 새 휴가 등록 <span class="ext-icon">↗</span>
-        </a>
-        <a class="btn-external-secondary"
-           href="https://timesheet.uangel.com/times/application/vacation/search.htm"
-           target="_blank" rel="noopener noreferrer"
-           title="회사 타임시트의 휴가계 관리 페이지를 새 탭으로 엽니다">
-          회사 페이지에서 관리 <span class="ext-icon">↗</span>
         </a>
       </div>
       <div id="annual-summary" class="vac-summary muted">로딩…</div>

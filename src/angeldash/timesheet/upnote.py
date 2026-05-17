@@ -21,7 +21,7 @@ def build_new_note_url(
     """upnote://x-callback-url/note/new URL 을 만든다.
 
     notebook_id 가 비어있으면 notebook 파라미터를 생략하여 UpNote 기본 노트북에 저장.
-    markdown=True 면 UpNote 가 본문을 마크다운으로 렌더 (들여쓰기 제거, '-' → bullet 변환).
+    markdown=True 면 UpNote 가 본문 마크다운 렌더 (들여쓰기 제거, '-' → bullet).
     plain text 그대로 보존하려면 markdown=False (기본).
     """
     params: dict[str, str] = {

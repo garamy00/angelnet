@@ -15,7 +15,8 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ..errors import ApiError, AuthError, BotBlockedError
+from .._common.errors import ApiError, AuthError, BotBlockedError
+from .._common.http_relogin import AutoReloginHttp
 from .models import User
 
 logger = logging.getLogger(__name__)
@@ -54,14 +55,33 @@ class TimesheetClient:
         self._user: User | None = None
         self._session_ready = False
         self._session_expires = 0.0
-        self._http = httpx.AsyncClient(
+        # 자동 재로그인 시 사용할 password 캐시. 최초 로그인 성공 시에만 채워짐.
+        self._password: str | None = None
+        # 만료 감지 + 1회 재시도 래퍼로 모든 HTTP 호출을 보낸다.
+        raw_http = httpx.AsyncClient(
             verify=False,
             timeout=HTTP_TIMEOUT,
             headers={"User-Agent": USER_AGENT},
         )
+        self._http = AutoReloginHttp(
+            raw_http,
+            can_refresh=lambda: self._password is not None,
+            refresh=self._refresh_session,
+        )
 
     async def close(self) -> None:
         await self._http.aclose()
+
+    async def _refresh_session(self) -> None:
+        """만료 감지 시 호출되는 재로그인 훅. 캐시 무효화 후 login 재실행."""
+        if self._password is None:
+            raise AuthError("cannot refresh session without cached password")
+        self._session_ready = False
+        self._session_expires = 0.0
+        self._user = None
+        # join 페이지 hidden 값도 새 세션에서 재취득해야 안전
+        self._join_ctx = None
+        await self.login(self._password)
 
     # ─── 인증 ────────────────────────────────────────
 
@@ -135,6 +155,8 @@ class TimesheetClient:
         self._user = User(user_id=cu_body["userId"], name=name)
         self._session_ready = True
         self._session_expires = time.time() + SESSION_TTL
+        # 성공한 password 만 캐시 → 첫 로그인 실패는 자동 재시도 트리거하지 않음.
+        self._password = password
         logger.info("Spring session established for user=%s", self.user_id)
         return self._user
 
@@ -144,16 +166,10 @@ class TimesheetClient:
     JOBTIME_SEARCH_URL = (
         "https://timesheet.uangel.com/times/timesheet/jobtime/search.json"
     )
-    JOBTIME_SAVE_URL = (
-        "https://timesheet.uangel.com/times/timesheet/jobtime/save.json"
-    )
+    JOBTIME_SAVE_URL = "https://timesheet.uangel.com/times/timesheet/jobtime/save.json"
 
-    JOIN_PAGE_URL = (
-        "https://timesheet.uangel.com/times/timesheet/join/searchForm.htm"
-    )
-    JOIN_SEARCH_URL = (
-        "https://timesheet.uangel.com/times/timesheet/join/search.json"
-    )
+    JOIN_PAGE_URL = "https://timesheet.uangel.com/times/timesheet/join/searchForm.htm"
+    JOIN_SEARCH_URL = "https://timesheet.uangel.com/times/timesheet/join/search.json"
     JOIN_USER_MAP_SAVE_URL = (
         "https://timesheet.uangel.com/times/timesheet/join/UserMapJoinSave.json"
     )
@@ -202,20 +218,20 @@ class TimesheetClient:
             name = (data[0] or "").strip()
             if not name:
                 continue
-            out.append({
-                "task_id": rid,
-                "name": name,
-                "work_type": (data[1] or "").strip(),
-            })
+            out.append(
+                {
+                    "task_id": rid,
+                    "name": name,
+                    "work_type": (data[1] or "").strip(),
+                }
+            )
         return out
 
     HOLIDAY_TAG_SEARCH_URL = (
         "https://timesheet.uangel.com/times/timesheet/jobtime/holidayTagSearch.json"
     )
 
-    async def list_holidays(
-        self, *, year_month: str
-    ) -> list[dict[str, Any]]:
+    async def list_holidays(self, *, year_month: str) -> list[dict[str, Any]]:
         """그 달의 공휴일/대체휴일/회사 행정휴일 등 태그 목록 조회.
 
         Returns:
@@ -259,9 +275,7 @@ class TimesheetClient:
         "https://timesheet.uangel.com/times/timesheet/jobtime/vacationSearch.json"
     )
 
-    async def list_vacations(
-        self, *, year_month: str
-    ) -> list[dict[str, Any]]:
+    async def list_vacations(self, *, year_month: str) -> list[dict[str, Any]]:
         """그 달의 휴가 (연차/반차 등) 목록 조회.
 
         Returns:
@@ -271,7 +285,8 @@ class TimesheetClient:
         import datetime as _dt
 
         resp = await self._http.post(
-            self.VACATION_SEARCH_URL, data={"year_month": year_month},
+            self.VACATION_SEARCH_URL,
+            data={"year_month": year_month},
         )
         body = self._safe_json(resp, exc_type=ApiError)
         if _is_bot_blocked(body):
@@ -308,6 +323,89 @@ class TimesheetClient:
                 except ValueError:
                     continue  # 그 달에 없는 일자 (예: 4월 31일)
                 out.append({"date": date_iso, "type": type_name, "hours": hours})
+        return out
+
+    async def fetch_jobtime_grid_detailed(
+        self, *, year_month: str
+    ) -> list[dict[str, Any]]:
+        """그 달의 task 메타 + 일별 시간을 분리 보존해서 반환.
+
+        회사 시스템의 row 형식이 회계 항목에 따라 텍스트 컬럼 수가 다르다
+        (단순 task: [name, work_type, 1일, …], 트리 구조: [root, sub, leaf, 1일, …]
+         처럼 1~3개). 첫 float 변환 가능한 위치부터 일별 시간으로 간주하고,
+        그 앞까지의 텍스트들을 메타로 모은다.
+
+        label 규칙:
+        - texts 가 1개   → "{texts[0]}"
+        - texts 가 2개+  → "{texts[0]} [{texts[-1]}]" (root + leaf, 같으면 root만)
+
+        Returns:
+            [{"task_name": <root>, "label": <표시 라벨>, "work_type": <leaf or "">,
+              "days": {day: hours}}, ...]
+        """
+        resp = await self._http.post(
+            self.JOBTIME_SEARCH_URL,
+            data={"dept_code": "", "year_month": year_month},
+        )
+        body = self._safe_json(resp, exc_type=ApiError)
+        if _is_bot_blocked(body):
+            raise BotBlockedError(str(body))
+        if resp.status_code >= 400:
+            raise ApiError(
+                f"fetch_jobtime_grid_detailed failed: status={resp.status_code}",
+                status_code=resp.status_code,
+                payload=body,
+            )
+        rows = body.get("rows", []) if isinstance(body, dict) else []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            rid = str(r.get("id", ""))
+            try:
+                if int(rid) < 0:
+                    continue
+            except ValueError:
+                continue
+            data = r.get("data", [])
+            if not data:
+                continue
+
+            # 텍스트 메타 / 일별 시간 분리 — 첫 float-가능 셀까지 텍스트로 모음
+            texts: list[str] = []
+            nums: list[float] = []
+            for v in data:
+                if not nums:
+                    try:
+                        nums.append(float(v))
+                    except (TypeError, ValueError):
+                        texts.append(str(v or "").strip())
+                else:
+                    try:
+                        nums.append(float(v))
+                    except (TypeError, ValueError):
+                        nums.append(0.0)
+
+            if not texts or not texts[0]:
+                continue  # 합계/소계 행 등
+
+            # 마지막 num 은 월합계, 그 앞이 일별
+            day_hours: dict[int, float] = {}
+            for day, h in enumerate(nums[:-1], start=1):
+                if h > 0:
+                    day_hours[day] = h
+
+            root = texts[0]
+            leaf = texts[-1] if len(texts) > 1 else ""
+            if leaf and leaf != root:
+                label = f"{root} [{leaf}]"
+            else:
+                label = root
+
+            out.append({
+                "task_name": root,
+                "label": label,
+                "work_type": leaf,
+                "days": day_hours,
+            })
         return out
 
     async def fetch_jobtime_grid(
@@ -348,8 +446,9 @@ class TimesheetClient:
             if not name:
                 continue
             day_hours: dict[int, float] = {}
-            # jobtime grid 의 data 형식: [task_name, work_type, 1일, 2일, ..., 말일, 월합계]
-            # data[2..-2] 가 일별 시간. (vacation grid 는 work_type 컬럼이 없어 data[1..-1].)
+            # jobtime grid data 형식:
+            #   [task_name, work_type, 1일, 2일, ..., 말일, 월합계]
+            # data[2..-2] 가 일별 시간. (vacation grid 는 work_type 없어 data[1..-1])
             for day, value in enumerate(data[2:-1], start=1):
                 try:
                     h = float(value)
@@ -369,16 +468,19 @@ class TimesheetClient:
     )
 
     async def get_annual_vacation_summary(
-        self, *, year: int,
+        self,
+        *,
+        year: int,
     ) -> dict[str, float | None]:
         """연간 휴가 사용/잔여 일수.
 
         Returns:
-            {"total": 23.0, "used": 9.0, "remaining": 14.0} — 파싱 실패 시 raw_text 포함.
-            서버 응답은 따옴표로 감싸진 URL-encoded 문자열 (예: '"23.0+-+9.0+%3D+14.0+%EC%9D%BC"').
+            {"total": 23.0, "used": 9.0, "remaining": 14.0}
+            파싱 실패 시 raw_text 포함. 서버 응답은 따옴표로 감싸진 URL-encoded
+            문자열 (예: '"23.0+-+9.0+%3D+14.0+%EC%9D%BC"').
         """
-        from urllib.parse import unquote
         import re as _re
+        from urllib.parse import unquote
 
         resp = await self._http.get(
             self.VACATION_ANNUAL_URL,
@@ -409,7 +511,11 @@ class TimesheetClient:
         }
 
     async def list_vacation_applications(
-        self, *, year: int, dept_code: str = "DADABF", position: str = "",
+        self,
+        *,
+        year: int,
+        dept_code: str = "DADABF",
+        position: str = "",
     ) -> list[dict[str, str]]:
         """연간 휴가계 목록 조회 (read-only).
 
@@ -427,9 +533,12 @@ class TimesheetClient:
                 "searchYear": str(year),
                 "cmd": "user",
                 "page": "1",
-                "startDate": "", "endDate": "",
-                "name": "", "status": "",
-                "deptCode": dept_code, "position": position,
+                "startDate": "",
+                "endDate": "",
+                "name": "",
+                "status": "",
+                "deptCode": dept_code,
+                "position": position,
             },
         )
         if resp.status_code >= 400:
@@ -447,12 +556,10 @@ class TimesheetClient:
         "https://timesheet.uangel.com/times/timesheet/jobtime/excelbyday.json"
     )
 
-    async def download_jobtime_excel(
-        self, *, year_month: str
-    ) -> tuple[bytes, str]:
+    async def download_jobtime_excel(self, *, year_month: str) -> tuple[bytes, str]:
         """그 달의 jobtime Excel(xlsx) 을 받아 (content, filename) 반환.
 
-        filename 은 회사 서버가 Content-Disposition 으로 알려주는 그대로 (URL 디코드 적용).
+        filename 은 회사 서버 Content-Disposition 그대로 (URL 디코드 적용).
         """
         from urllib.parse import unquote
 
@@ -556,18 +663,19 @@ class TimesheetClient:
                 status_code=resp.status_code,
             )
         import re
+
         html = resp.text
         ctx: dict[str, str] = {}
         for field in ("user_id", "position", "status", "dept_code", "group_id"):
             # name="X" value="V" 또는 id="X" value="V" 패턴
             m = re.search(
-                rf'(?:name|id)=[\"\']{field}[\"\'][^>]*value=[\"\']([^\"\']*)[\"\']',
+                rf"(?:name|id)=[\"\']{field}[\"\'][^>]*value=[\"\']([^\"\']*)[\"\']",
                 html,
             )
             if not m:
                 # value 가 앞에 있는 경우
                 m = re.search(
-                    rf'value=[\"\']([^\"\']*)[\"\'][^>]*(?:name|id)=[\"\']{field}[\"\']',
+                    rf"value=[\"\']([^\"\']*)[\"\'][^>]*(?:name|id)=[\"\']{field}[\"\']",
                     html,
                 )
             if m:
@@ -620,17 +728,23 @@ class TimesheetClient:
             if not isinstance(row_data, list) or len(row_data) < 3:
                 continue
             joined_flag = str(row_data[3]) if len(row_data) >= 4 else "0"
-            out_rows.append({
-                "project_id": str(row_data[0]),
-                "code": str(row_data[1]),
-                "name": str(row_data[2]),
-                "joined": joined_flag in ("1", "true", "True"),
-            })
+            out_rows.append(
+                {
+                    "project_id": str(row_data[0]),
+                    "code": str(row_data[1]),
+                    "name": str(row_data[2]),
+                    "joined": joined_flag in ("1", "true", "True"),
+                }
+            )
         return {
             "rows": out_rows,
-            "total": int(body.get("totalCount", len(out_rows))) if isinstance(body, dict) else len(out_rows),
+            "total": int(body.get("totalCount", len(out_rows)))
+            if isinstance(body, dict)
+            else len(out_rows),
             "page": int(body.get("page", page)) if isinstance(body, dict) else page,
-            "page_size": int(body.get("pageSize", page_size)) if isinstance(body, dict) else page_size,
+            "page_size": int(body.get("pageSize", page_size))
+            if isinstance(body, dict)
+            else page_size,
         }
 
     async def join_project(self, *, project_id: str) -> None:
@@ -642,11 +756,13 @@ class TimesheetClient:
         import json as _json
 
         ctx = await self._fetch_join_page_context()
-        rows = [{
-            "project_id": project_id,
-            "user_id": ctx.get("user_id", self.user_id),
-            "status": "C002001",
-        }]
+        rows = [
+            {
+                "project_id": project_id,
+                "user_id": ctx.get("user_id", self.user_id),
+                "status": "C002001",
+            }
+        ]
         resp = await self._http.post(
             self.JOIN_USER_MAP_SAVE_URL,
             data={"rows": _json.dumps(rows)},
@@ -670,9 +786,8 @@ class TimesheetClient:
     JOIN_TASKS_SAVE_URL = (
         "https://timesheet.uangel.com/times/timesheet/join/tasksMapJoinSave.json"
     )
-    async def list_project_tasks(
-        self, *, project_id: str
-    ) -> list[dict[str, Any]]:
+
+    async def list_project_tasks(self, *, project_id: str) -> list[dict[str, Any]]:
         """프로젝트의 task 목록 + 가입 여부.
 
         Returns:
@@ -704,16 +819,16 @@ class TimesheetClient:
             if not isinstance(data, list) or len(data) < 2:
                 continue
             joined_flag = str(data[2]) if len(data) >= 3 else "0"
-            out.append({
-                "task_id": str(data[0]),
-                "name": str(data[1]),
-                "joined": joined_flag in ("1", "true", "True"),
-            })
+            out.append(
+                {
+                    "task_id": str(data[0]),
+                    "name": str(data[1]),
+                    "joined": joined_flag in ("1", "true", "True"),
+                }
+            )
         return out
 
-    async def set_project_task_joined(
-        self, *, project_id: str, task_id: str
-    ) -> None:
+    async def set_project_task_joined(self, *, project_id: str, task_id: str) -> None:
         """프로젝트의 특정 task 에 가입. tasksMapJoinSave.json 호출.
 
         회사 페이지 로직에 따라 'rows' 의 각 항목 status='C0000001'.
@@ -721,12 +836,14 @@ class TimesheetClient:
         import json as _json
 
         ctx = await self._fetch_join_page_context()
-        rows = [{
-            "task_id": task_id,
-            "user_id": ctx.get("user_id", self.user_id),
-            "project_id": project_id,
-            "status": "C0000001",
-        }]
+        rows = [
+            {
+                "task_id": task_id,
+                "user_id": ctx.get("user_id", self.user_id),
+                "project_id": project_id,
+                "status": "C0000001",
+            }
+        ]
         resp = await self._http.post(
             self.JOIN_TASKS_SAVE_URL,
             data={"rows": _json.dumps(rows)},
@@ -751,8 +868,8 @@ class TimesheetClient:
     async def unjoin_project(self, *, project_id: str) -> None:
         """프로젝트 + 모든 task 동시 탈퇴.
 
-        회사 시스템에는 프로젝트 단독 탈퇴 API 가 없음 (UserMapJoinSave C002002 는 no-op).
-        실제 동작: tasksMapDelAll.htm 가 task 전부 삭제 + 프로젝트도 자동 탈퇴 (cascade).
+        회사에는 프로젝트 단독 탈퇴 API 가 없음 (UserMapJoinSave C002002 는 no-op).
+        실제 동작: tasksMapDelAll.htm 가 task 모두 삭제 + 프로젝트 자동 탈퇴 (cascade).
         단 가입 task 가 0개면 tasksMapDelAll 이 success=false 를 반환하므로,
         그 경우엔 임의 task 1개를 임시로 가입한 뒤 즉시 DelAll 로 같이 삭제.
         """
@@ -768,7 +885,8 @@ class TimesheetClient:
             )
         if not any(t.get("joined") for t in tasks):
             await self.set_project_task_joined(
-                project_id=project_id, task_id=tasks[0]["task_id"],
+                project_id=project_id,
+                task_id=tasks[0]["task_id"],
             )
 
         resp = await self._http.post(
@@ -790,7 +908,8 @@ class TimesheetClient:
             raise ApiError(f"unjoin_project: non-json response: {text[:200]}")
         if not (isinstance(body, dict) and body.get("success") is True):
             raise ApiError(
-                f"unjoin_project: server rejected (body={body})", payload=body,
+                f"unjoin_project: server rejected (body={body})",
+                payload=body,
             )
 
     # ─── 내부 헬퍼 ─────────────────────────────────
@@ -809,9 +928,7 @@ class TimesheetClient:
                     f"non-json response: status={resp.status_code}",
                     status_code=resp.status_code,
                 ) from exc
-            raise exc_type(
-                f"non-json response: status={resp.status_code}"
-            ) from exc
+            raise exc_type(f"non-json response: status={resp.status_code}") from exc
 
 
 # ─── 휴가계 HTML 파서 ────────────────────────────────────
@@ -895,16 +1012,18 @@ def _parse_vacation_list_html(html: str) -> list[dict[str, str]]:
         from_date, to_date = (m.group(1), m.group(2)) if m else (period, "")
         # onclick: goSubmit('detail','35115','detail') → 35115 추출
         vid_m = _re.search(r"goSubmit\([^,]+,\s*['\"](\d+)['\"]", onclick)
-        out.append({
-            "draft_date": draft,
-            "vacation_type": vtype,
-            "reason": reason,
-            "from_date": from_date,
-            "to_date": to_date,
-            "days": days,
-            "registered_date": regd,
-            "name": name,
-            "status": status,
-            "vacation_id": vid_m.group(1) if vid_m else "",
-        })
+        out.append(
+            {
+                "draft_date": draft,
+                "vacation_type": vtype,
+                "reason": reason,
+                "from_date": from_date,
+                "to_date": to_date,
+                "days": days,
+                "registered_date": regd,
+                "name": name,
+                "status": status,
+                "vacation_id": vid_m.group(1) if vid_m else "",
+            }
+        )
     return out

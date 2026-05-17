@@ -51,9 +51,25 @@ function todayISO() {
   return isoFromLocalDate(new Date());
 }
 
-function setLoading(on) {
+function setLoading(on, label) {
   state.isLoading = on;
   document.body.classList.toggle("app-loading", !!on);
+  let overlay = document.getElementById("rooms-progress");
+  if (on) {
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "rooms-progress";
+      overlay.className = "progress-overlay";
+      overlay.innerHTML = '<div class="progress-box">'
+        + '<div class="spinner"></div>'
+        + '<div class="progress-label"></div>'
+        + '</div>';
+      document.body.appendChild(overlay);
+    }
+    overlay.querySelector(".progress-label").textContent = label || "조회 중…";
+  } else if (overlay) {
+    overlay.remove();
+  }
 }
 
 function escapeHtml(s) {
@@ -755,7 +771,11 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => {
       state.view = btn.dataset.view;
       localStorage.setItem("view", state.view);
-      render();
+      // 2주뷰는 cell 수가 많아 render 가 무거움 — overlay 먼저 paint 후 render
+      setLoading(true, "뷰 전환 중…");
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        try { render(); } finally { setLoading(false); }
+      }));
     });
   });
 

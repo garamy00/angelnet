@@ -3,7 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from angeldash.models import Reservation, ReservationCreate, User
+from angeldash._common.models import User
+from angeldash.rooms.models import Reservation, ReservationCreate
 
 SAMPLE_GQL_ROW = {
     "id": "28",

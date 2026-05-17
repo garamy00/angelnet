@@ -1,18 +1,6 @@
-/* CSS 커스텀 프로퍼티 — 다크 팔레트 */
+/* 색 토큰은 main.css 의 [data-theme] 변수에 위임. 회의실 전용 sizing 변수만 정의.
+   (과거엔 이 파일이 자체 :root 로 다크 팔레트를 덮어써서 라이트 모드 적용이 안 됐다.) */
 :root {
-  --color-bg: #0f1115;
-  --color-panel: #1a1d23;
-  --color-panel-2: #14171c;
-  --color-fg: #e6e8eb;
-  --color-fg-mute: #9ba3ad;
-  --color-border: #2a2f37;
-  --color-mine: #4a90e2;
-  --color-mine-bg: #1d2c40;
-  --color-other: #6b7280;
-  --color-other-bg: #1f2127;
-  --color-empty-hover: #1c1f25;
-  --color-toast-ok: #15803d;
-  --color-toast-err: #b91c1c;
   --row-h: 24px;
   --col-w: 130px;
   --time-col-w: 70px;
@@ -118,6 +106,12 @@
 .reservation-block .who { font-weight: 700; color: #fff; }
 .reservation-block.other .who { color: #e5e7eb; }
 
+/* 라이트 모드 — 옅은 mine-bg / other-bg 위에 옅은 글씨가 안 보여 진한 톤으로 보정 */
+:root[data-theme="light"] .reservation-block.mine { color: #1e3a8a; }
+:root[data-theme="light"] .reservation-block.other { color: #374151; }
+:root[data-theme="light"] .reservation-block .who { color: #1e40af; }
+:root[data-theme="light"] .reservation-block.other .who { color: #111827; }
+
 .my-reservations {
   padding: 20px;
   background: var(--color-panel);
@@ -138,38 +132,64 @@
   gap: 12px;
 }
 
-/* 모달 */
-.modal-backdrop {
+/* 회의실 모달 — main.css 의 .modal / .modal-backdrop 룰과 마크업 구조가 달라
+   id specificity 로 둘을 분리. (main.css: .modal 이 외곽 fixed, .modal-panel 이 panel.
+   여기: .modal-backdrop 이 외곽 fixed, .modal 이 panel.) */
+#modal-root .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: var(--backdrop-bg, rgba(0,0,0,0.4));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
 }
 
-.modal {
+#modal-root .modal {
+  position: relative;
+  inset: auto;
   background: var(--color-panel);
   color: var(--color-fg);
   border-radius: 8px;
-  padding: 20px;
-  min-width: 420px;
+  padding: 20px 24px;
+  width: 420px;
   max-width: 90vw;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-strong, 0 10px 30px rgba(0,0,0,0.2));
+  display: block;
+  text-align: left;
 }
 
-.modal h3 { margin: 0 0 14px; font-size: 16px; }
-.modal .form-row { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
-.modal label { font-size: 12px; color: var(--color-fg-mute); }
-.modal input, .modal select, .modal textarea {
-  padding: 6px 8px;
+#modal-root .modal h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  text-align: left;
+}
+#modal-root .modal .form-row {
+  margin-bottom: 12px;
+  display: block;
+  text-align: left;
+}
+#modal-root .modal label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-fg-mute);
+  margin-bottom: 4px;
+  text-align: left;
+}
+#modal-root .modal input,
+#modal-root .modal select,
+#modal-root .modal textarea {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 6px;
   font: inherit;
   background: var(--color-panel-2);
   color: var(--color-fg);
+  box-sizing: border-box;
 }
+#modal-root .modal .stepper { width: 100%; }
 .modal .actions {
   display: flex;
   justify-content: flex-end;
@@ -251,7 +271,7 @@ body.app-loading::after {
   content: "";
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--backdrop-bg, rgba(0, 0, 0, 0.25));
   z-index: 300;
 }
 body.app-loading #btn-refresh {
@@ -334,7 +354,9 @@ body.app-loading #toast-root { pointer-events: auto; }
 }
 .room-chip input { margin: 0; cursor: pointer; }
 .room-chip.checked { background: var(--color-mine-bg); border-color: var(--color-mine); color: #cfe4ff; }
-.room-chip.all.checked { background: var(--color-toast-ok); border-color: var(--color-toast-ok); color: #fff; }
+.room-chip.all.checked { background: var(--color-mine-bg); border-color: var(--color-mine); color: #cfe4ff; }
+:root[data-theme="light"] .room-chip.checked,
+:root[data-theme="light"] .room-chip.all.checked { color: #1e3a8a; }
 
 /* ─── 2주 뷰 ─────────────────────────────────────────────── */
 #week-container { padding: 16px 20px; }
@@ -397,16 +419,20 @@ body.app-loading #toast-root { pointer-events: auto; }
   border-bottom: 1px solid var(--color-border);
   letter-spacing: 0.3px;
 }
+:root[data-theme="light"] .week-grid .day-head {
+  background: var(--color-accent);
+}
 .week-section.next-week .week-grid .day-head { background: #2b6b3f; }
+:root[data-theme="light"] .week-section.next-week .week-grid .day-head { background: var(--color-success); }
 .week-grid .day-head.today {
   background: var(--color-mine);
   box-shadow: inset 0 -3px 0 #fff;
 }
 
-/* 회의실 헤더 — 패널 톤 + 밝은 흰색 텍스트 */
+/* 회의실 헤더 — 패널 톤 + 테마 본문 색 */
 .week-grid .room-head {
   background: var(--color-panel);
-  color: #e6e8eb;
+  color: var(--color-fg);
   font-weight: 600;
   font-size: 12px;
   text-align: center;
@@ -450,3 +476,9 @@ body.app-loading #toast-root { pointer-events: auto; }
 .wg-res.all-day.other { border-color: var(--color-other); }
 .wg-res .who { font-weight: 700; color: #fff; }
 .wg-res.other .who { color: #e5e7eb; }
+
+/* 라이트 모드 — 2주뷰 예약 블록 텍스트 가독성 보정 */
+:root[data-theme="light"] .wg-res { color: #1e3a8a; }
+:root[data-theme="light"] .wg-res.other { color: #374151; }
+:root[data-theme="light"] .wg-res .who { color: #1e40af; }
+:root[data-theme="light"] .wg-res.other .who { color: #111827; }

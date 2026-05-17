@@ -1,40 +1,96 @@
+/* Ko-fi 톤 웹폰트 — Plus Jakarta Sans (Google Fonts).
+   @import 은 반드시 stylesheet 최상단에 위치해야 한다. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /*
- * AngelDash 통합 다크 팔레트.
- * 회의실(style.css) 와 보고서/프로젝트/로그/설정(이 파일) 가 같은 :root 변수를 공유한다.
- * style.css 가 사용하는 알리아스 (--color-fg, --color-fg-mute, --color-panel, --color-mine 등)
- * 도 여기서 정의해 한 곳에서 팔레트를 일괄 관리.
+ * AngelDash 통합 팔레트 — dark (default) / light (Ko-fi 톤) 두 테마.
+ * <html data-theme="light|dark"> 로 스위치. JS 에서 localStorage('theme') 에
+ * 영속화. 회의실(style.css) 와 보고서/프로젝트/로그/설정(이 파일) 가 같은
+ * :root 변수를 공유하므로 변수만 바꾸면 두 영역 모두 자동으로 따른다.
+ *
+ * 추가 변수 (테마 의존):
+ *   --rgb-bg / --rgb-text / --rgb-accent: 알파 합성용 RGB 트리플
+ *   --shadow-strong / --shadow-medium: 박스 그림자
+ *   --actions-bar-bg: 액션바 배경 (다크는 살짝 밝게, 라이트는 흰색)
  */
-:root {
-  /* 표면 — 페이지 배경 → 카드/패널 → 강조 패널 순으로 명도 상승 */
-  --color-bg: #0f1115;
-  --color-surface: #1a1d23;
-  --color-surface-2: #14171c;
-  --color-panel: #1a1d23;           /* style.css 호환 알리아스 */
-  --color-panel-2: #14171c;         /* style.css 호환 */
-  --color-border: #2a2f37;
+/* 두 테마 모두 UpNote 톤 — 차분한 블루(`#2563eb`) primary, 절제된 명도,
+   가볍은 그림자, 8px radius. 다크는 거의 검정에 가까운 그레이스케일. */
+:root,
+:root[data-theme="dark"] {
+  /* 표면 — 페이지 배경 → 카드/패널 → 강조 패널 (UpNote dark 톤) */
+  --color-bg: #18181b;
+  --color-surface: #1f1f23;
+  --color-surface-2: #27272a;
+  --color-panel: #1f1f23;           /* style.css 호환 */
+  --color-panel-2: #27272a;         /* style.css 호환 */
+  --color-border: #2f2f33;
 
   /* 텍스트 */
-  --color-text: #e6e8eb;
-  --color-fg: #e6e8eb;              /* style.css 호환 */
-  --color-muted: #9ba3ad;
-  --color-fg-mute: #9ba3ad;         /* style.css 호환 */
+  --color-text: #ececef;
+  --color-fg: #ececef;
+  --color-muted: #a1a1aa;
+  --color-fg-mute: #a1a1aa;
 
-  /* 강조 */
-  --color-accent: #4a90e2;
-  --color-mine: #4a90e2;            /* style.css 호환 */
-  --color-mine-bg: #1d2c40;
-  --color-other: #6b7280;
-  --color-other-bg: #1f2127;
-  --color-empty-hover: #1c1f25;
+  /* 강조 — 차분한 블루 */
+  --color-accent: #3b82f6;
+  --color-mine: #3b82f6;
+  --color-mine-bg: #1e3a8a;
+  --color-other: #71717a;
+  --color-other-bg: #27272a;
+  --color-empty-hover: #2a2a2e;
 
   /* 상태 */
-  --color-success: #15803d;
-  --color-warn: #ca8a04;
-  --color-danger: #b91c1c;
-  --color-toast-ok: #15803d;        /* style.css 호환 */
-  --color-toast-err: #b91c1c;       /* style.css 호환 */
+  --color-success: #16a34a;
+  --color-warn: #d97706;
+  --color-danger: #ef4444;
+  --color-toast-ok: #16a34a;
+  --color-toast-err: #ef4444;
 
-  --radius: 6px;
+  --radius: 8px;
+  --radius-pill: 999px;             /* 칩/배지 용도. 버튼은 일반 radius 사용 */
+
+  --rgb-accent: 59, 130, 246;
+  --shadow-strong: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-medium: 0 -2px 12px rgba(0, 0, 0, 0.25);
+  --backdrop-bg: rgba(0, 0, 0, 0.55);
+  --actions-bar-bg: #1f1f23;
+}
+
+:root[data-theme="light"] {
+  /* UpNote light — 거의 흰색 배경 + 차분한 블루 */
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f4f4f5;
+  --color-panel: #ffffff;
+  --color-panel-2: #f4f4f5;
+  --color-border: #e4e4e7;
+
+  --color-text: #18181b;
+  --color-fg: #18181b;
+  --color-muted: #71717a;
+  --color-fg-mute: #71717a;
+
+  --color-accent: #2563eb;
+  --color-mine: #2563eb;
+  --color-mine-bg: #dbeafe;
+  --color-other: #a1a1aa;
+  --color-other-bg: #f4f4f5;
+  --color-empty-hover: #f4f4f5;
+
+  --color-success: #16a34a;
+  --color-warn: #d97706;
+  --color-danger: #dc2626;
+  --color-toast-ok: #16a34a;
+  --color-toast-err: #dc2626;
+
+  --radius: 8px;
+  --radius-pill: 999px;
+
+  --rgb-accent: 37, 99, 235;
+  --shadow-strong: 0 12px 32px rgba(15, 23, 42, 0.08);
+  --shadow-medium: 0 -2px 12px rgba(15, 23, 42, 0.05);
+  --backdrop-bg: rgba(15, 23, 42, 0.30);
+  --actions-bar-bg: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -42,12 +98,14 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-               "Segoe UI", Roboto, sans-serif;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+               "Apple SD Gothic Neo", "Pretendard", "Segoe UI", Roboto, sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
   font-size: 14px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ─── 상단 nav 바 ──────────────────────────────────── */
@@ -61,15 +119,30 @@ header {
 }
 
 header nav a {
-  margin-right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 2px;
+  padding: 7px 11px;
   color: var(--color-muted);
   text-decoration: none;
   font-weight: 500;
+  font-size: 13.5px;
+  border-radius: var(--radius);
+  transition: background 120ms, color 120ms;
 }
 
-header nav a:hover { color: var(--color-text); }
+header nav a:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
 
-header nav a.active { color: var(--color-accent); }
+header nav a.active {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  font-weight: 600;
+}
+header nav a.active svg { color: var(--color-accent); }
 
 /* 헤더 오른쪽 부가 영역 (현재 사용자 / refresh 버튼 등) */
 header .header-right {
@@ -78,15 +151,38 @@ header .header-right {
   gap: 12px;
 }
 header .header-right #user-name { font-size: 13px; }
-header .header-right #btn-refresh {
+header .header-right #btn-refresh,
+header .header-right #btn-theme {
   background: transparent;
   border: 1px solid var(--color-border);
   padding: 4px 8px;
 }
+header .header-right #btn-theme {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* 라이트 모드에서 입력류 배경이 흰색 surface 와 충돌하지 않도록 surface-2 사용 */
+:root[data-theme="light"] input,
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] select {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+:root[data-theme="light"] input:hover,
+:root[data-theme="light"] textarea:hover,
+:root[data-theme="light"] select:hover {
+  border-color: var(--color-accent);
+}
+
+/* 라이트 모드 — primary 버튼 텍스트는 항상 흰색 유지 (위쪽 button.primary 가 처리),
+   회의실 페이지의 modal 등 일부는 dark 톤 가정이라 텍스트 색 보정 */
+:root[data-theme="light"] body {
+  /* 본문 텍스트 톤은 너무 검정이 아니라 슬레이트 계열로 */
+  color: #1f2937;
+}
 
 main {
-  max-width: 1100px;
-  margin: 0 auto;
   padding: 20px;
 }
 
@@ -98,20 +194,84 @@ button {
   background: var(--color-surface);
   color: var(--color-text);
   border-radius: var(--radius);
-  padding: 8px 14px;
-  font-size: 14px;
+  padding: 7px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
+  transition: background-color 120ms, border-color 120ms,
+              color 120ms, transform 80ms;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
 }
 
-button:hover { background: var(--color-empty-hover); }
+button:not(.primary):not(.btn-day-report):not(.orphan-delete):hover {
+  background: var(--color-empty-hover);
+  border-color: var(--color-muted);
+}
+button:active { transform: translateY(1px); }
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
 
 button.primary {
   background: var(--color-accent);
   color: white;
   border-color: var(--color-accent);
+  font-weight: 500;
 }
 
-button.primary:hover { filter: brightness(1.1); }
+button.primary:hover {
+  filter: brightness(0.92);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* 아이콘 (인라인 SVG) — 기본 1em 사이즈 + baseline 정렬.
+   더 구체적인 컨텍스트(button, icon-only 등) 는 아래에서 override. */
+svg.lucide {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+
+button svg, .nav-icon, a svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* 헤딩/서브타이틀 / 라벨 안의 SVG — 텍스트와 자연스럽게 정렬 */
+h1 svg, h2 svg, h3 svg, h4 svg, summary svg,
+.week-sidebar-header svg,
+.group-label svg,
+.vacation-tag svg,
+.holiday-tag svg,
+.today-tag svg {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-right: 0.35em;
+  stroke-width: 1.75;
+}
+h2 svg { color: var(--color-muted); }
+h3 svg, .week-sidebar-header svg, summary svg { color: var(--color-muted); }
+
+/* icon-only 버튼 — 정사각형 + 둥근 모서리 + 패딩 균일 */
+button.icon-only {
+  padding: 8px;
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+}
+button.icon-only svg { width: 18px; height: 18px; }
 
 input, textarea, select {
   border: 1px solid var(--color-border);
@@ -146,10 +306,25 @@ code {
 .day-block {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-accent);   /* 평일 default = 파랑 */
   border-radius: var(--radius);
   padding: 12px 16px;
   margin-bottom: 16px;
   counter-reset: entry;
+}
+
+/* day-block 좌측 stripe 색상 우선순위 (낮음 → 높음):
+   평일 (default) → 주말 → 휴가 있는 날 → 공휴일.
+   아래 룰 작성 순서대로 cascade — 순서 변경 금지. */
+.day-block[data-weekday="0"],  /* 일요일 */
+.day-block[data-weekday="6"] { /* 토요일 */
+  border-left-color: var(--color-muted);
+}
+.day-block[data-has-vacation="true"] {
+  border-left-color: var(--color-warn);
+}
+.day-block--holiday {
+  border-left-color: var(--color-danger);
 }
 
 .day-header {
@@ -157,7 +332,12 @@ code {
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-  margin-bottom: 8px;
+  font-size: 16px;
+  background: var(--color-surface-2);
+  margin: -12px -16px 12px -16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .day-header-right {
@@ -166,22 +346,20 @@ code {
   gap: 12px;
 }
 
-/* 오늘 박스 — 옅은 블루톤 배경 + 좌측 액센트 스트라이프
-   border 자체는 기존 톤 그대로 두고, 좌측 padding 안쪽에 3px 스트라이프만 표시 */
+/* 오늘 박스 — 진한 블루 배경 + 두꺼운 좌측 액센트 + 글로우
+   기본 day-block 이 이미 좌측 4px stripe 를 갖고 있으므로,
+   오늘은 stripe 폭을 키우고 박스 전체에 glow 를 입혀 도드라지게 한다. */
 .day-block--today {
-  background: rgba(74, 144, 226, 0.08);
-  position: relative;
-  padding-left: 19px; /* 16 + 3 (스트라이프 폭) */
+  background: rgba(var(--rgb-accent), 0.14);
+  border-left-width: 8px;
+  border-left-color: var(--color-accent);
+  box-shadow:
+    0 0 0 1px var(--color-accent),
+    0 6px 24px rgba(var(--rgb-accent), 0.25);
 }
-.day-block--today::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  left: -1px;
-  width: 3px;
-  background: var(--color-accent);
-  border-radius: var(--radius) 0 0 var(--radius);
+.day-block--today .day-header {
+  background: rgba(var(--rgb-accent), 0.18);
+  border-bottom-color: var(--color-accent);
 }
 .today-tag {
   font-size: 11px;
@@ -200,7 +378,12 @@ code {
   color: #fff;
   border-color: var(--color-accent);
 }
-.btn-day-report:hover { filter: brightness(1.1); }
+.btn-day-report:hover {
+  filter: brightness(0.92);
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
 
 .entry {
   border-top: 1px solid var(--color-border);
@@ -233,6 +416,30 @@ code {
 
 .entry-header input.category { flex: 1; }
 .entry-header input.hours { width: 60px; text-align: right; }
+.entry-header .hours-unit {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+/* 시간 인풋 + 'h' 와 삭제 버튼 사이를 spacer 로 분리 — 삭제 버튼이 row 우측 끝에 */
+.entry-header .entry-spacer { flex: 1; }
+
+/* 삭제 버튼 — ghost 스타일, hover 시 danger 톤. 시간 인풋과 분리되어 우측 끝. */
+.entry-header .remove {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+}
+.entry-header .remove svg { width: 16px; height: 16px; }
+.entry-header .remove:hover {
+  background: var(--color-empty-hover);
+  color: var(--color-danger);
+  border-color: var(--color-border);
+}
 
 .entry-body {
   width: calc(100% - 32px);
@@ -253,17 +460,23 @@ code {
 .actions-bar {
   position: sticky;
   bottom: 0;
-  background: #262a32;
+  background: var(--actions-bar-bg);
   border-top: 1px solid var(--color-border);
   padding: 22px 24px;
   display: flex;
   gap: 14px;
   align-items: center;
   margin-top: 24px;
-  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-medium);
 }
 /* 마지막 day-block / week-notes 가 액션바 뒤에 가려지지 않도록 main 자체에 여백 */
 main { padding-bottom: 10px; }
+
+/* ─── 설정 페이지 — 본문 폭 고정 + 중앙 정렬 ───── */
+body.page-settings main {
+  max-width: 820px;
+  margin: 0 auto;
+}
 
 /* ─── 설정 페이지 — 카드형 섹션 ───────────────── */
 main > section:not(.actions-bar) {
@@ -274,6 +487,114 @@ main > section:not(.actions-bar) {
   margin-bottom: 18px;
   overflow: hidden;
 }
+
+/* h2 + 우측 토글을 묶는 타이틀 바 */
+main > section:not(.actions-bar) > .section-title {
+  margin: 0 -28px 18px;
+  padding: 12px 28px;
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+main > section:not(.actions-bar) > .section-title > h2 {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* h3 + 우측 토글 묶음 (Notion 의 Projects / Week Summary / Weekly Report) */
+main > section:not(.actions-bar) > .subsection-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 0 10px;
+}
+main > section:not(.actions-bar) > .subsection-title > h3 {
+  margin: 0;
+  padding: 6px 0 6px 12px;
+  border-left: 3px solid var(--color-accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 사용 토글 — iOS 스타일 슬라이드 스위치
+   체크박스 자체를 appearance:none 으로 감추고 track/thumb 로 재구성. */
+.enable-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--color-muted);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+.enable-toggle:hover { color: var(--color-text); }
+.enable-toggle > span {
+  display: inline-block;
+  line-height: 1;
+}
+.enable-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  transition: background-color 160ms ease, border-color 160ms ease;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+.enable-toggle input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+.enable-toggle input[type="checkbox"]:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.enable-toggle input[type="checkbox"]:checked::before {
+  left: 17px;
+}
+.enable-toggle input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.enable-toggle:has(input:checked) {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* 비활성화 영역 — JS 가 토글 상태에 따라 .is-collapsed 를 자식 element 에 부여.
+   완전 숨김으로 스크롤 길이 단축. 타이틀과 첫 안내 문단은 dim 대상에서 제외해
+   비활성 상태에서도 섹션 식별이 가능. */
+.is-collapsed { display: none !important; }
 
 main > section:not(.actions-bar) > h2 {
   margin: 0 -28px 18px;
@@ -293,13 +614,19 @@ main > section:not(.actions-bar) > h3 {
   font-weight: 600;
   color: var(--color-text);
 }
+main > section:not(.actions-bar) > h4 {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
 
 /* 첫 단락 (section 의 도입 설명) — h2 바로 아래 */
 main > section:not(.actions-bar) > h2 + p.muted {
   margin-top: 0;
   margin-bottom: 18px;
   padding: 10px 14px;
-  background: rgba(74, 144, 226, 0.05);
+  background: rgba(var(--rgb-accent), 0.05);
   border-left: 3px solid var(--color-accent);
   border-radius: 0 4px 4px 0;
   font-size: 13px;
@@ -476,7 +803,7 @@ main > section:not(.actions-bar) > div > button {
 .flash {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--backdrop-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -493,7 +820,7 @@ main > section:not(.actions-bar) > div > button {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-strong);
 }
 .flash--fail .flash__box { border-color: var(--color-danger); }
 .flash--ok .flash__box { border-color: var(--color-success); }
@@ -528,7 +855,7 @@ main > section:not(.actions-bar) > div > button {
 .progress-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--backdrop-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -543,7 +870,7 @@ main > section:not(.actions-bar) > div > button {
   align-items: center;
   gap: 20px;
   min-width: 320px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-strong);
 }
 .progress-label { font-size: 16px; font-weight: 500; }
 .spinner {
@@ -715,7 +1042,8 @@ main > section:not(.actions-bar) > div > button {
 #joinable-table,
 #projects-table,
 #mappings-table,
-#patterns-table {
+#patterns-table,
+#logs-table {
   margin-top: 12px;
   width: 100%;
   border-collapse: collapse;
@@ -724,7 +1052,8 @@ main > section:not(.actions-bar) > div > button {
 #joinable-table th, #joinable-table td,
 #projects-table th, #projects-table td,
 #mappings-table th, #mappings-table td,
-#patterns-table th, #patterns-table td {
+#patterns-table th, #patterns-table td,
+#logs-table th, #logs-table td {
   border-bottom: 1px solid var(--color-border);
   padding: 6px 8px;
   text-align: left;
@@ -733,7 +1062,8 @@ main > section:not(.actions-bar) > div > button {
 #joinable-table thead th,
 #projects-table thead th,
 #mappings-table thead th,
-#patterns-table thead th {
+#patterns-table thead th,
+#logs-table thead th {
   background: var(--color-surface-2);
   font-weight: 600;
   border-bottom: 2px solid var(--color-border);
@@ -769,25 +1099,111 @@ main > section:not(.actions-bar) > div > button {
   color: #fff;
   filter: none;
 }
-.btn-external-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 7px 12px;
+.ext-icon { font-size: 12px; opacity: 0.85; }
+
+/* ─── 주차 사이드바 (일일/주간업무보고) ─────────────── */
+main.with-sidebar {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.week-sidebar {
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  background: transparent;
-  color: var(--color-muted);
+  padding: 10px 0;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+}
+.week-sidebar-header {
+  padding: 4px 14px 8px;
+  font-weight: 600;
   font-size: 13px;
-  text-decoration: none;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+.week-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 6px;
+}
+.week-sidebar-list .muted {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.week-sidebar-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 1px 0;
+  font-size: 12.5px;
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+.week-sidebar-item:hover {
+  background: var(--color-surface-2);
+}
+.week-sidebar-item.active {
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+.main-content {
+  min-width: 0;  /* grid 안에서 자식 overflow 허용 */
+}
+
+/* ─── 컬럼 리사이저블 표 (주간업무보고 / 로그 등) ──────── */
+table.resizable-table {
+  table-layout: fixed;
+  width: 100%;
+}
+table.resizable-table th {
+  position: relative;
+  user-select: none;
+}
+.col-resize-handle {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.col-resize-handle:hover,
+.col-resize-handle:active {
+  background: var(--color-accent);
+}
+
+/* 정렬 가능한 헤더 (로그 표) */
+table.sortable-table thead th {
   cursor: pointer;
 }
-.btn-external-secondary:hover {
-  color: var(--color-text);
-  border-color: var(--color-muted);
-  filter: none;
+table.sortable-table thead th .sort-indicator {
+  display: inline-block;
+  width: 12px;
+  margin-left: 4px;
+  color: var(--color-muted);
+  font-size: 11px;
 }
-.ext-icon { font-size: 12px; opacity: 0.85; }
+table.sortable-table thead th.sort-asc .sort-indicator::before {
+  content: "▲";
+  color: var(--color-accent);
+}
+table.sortable-table thead th.sort-desc .sort-indicator::before {
+  content: "▼";
+  color: var(--color-accent);
+}
 
 /* 휴가조회 — 연간 요약 표시 */
 .vac-summary {
@@ -877,3 +1293,514 @@ main section h3 {
 /* 링크 */
 a { color: var(--color-accent); }
 a:hover { filter: brightness(1.2); }
+
+/* ─── 진행중인 일정 (일일업무보고 상단 영역) ─────────────── */
+#ongoing-schedule {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+}
+#ongoing-schedule summary {
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+}
+#ongoing-schedule summary::-webkit-details-marker { display: none; }
+#ongoing-schedule summary::before {
+  content: "▶ ";
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-right: 6px;
+}
+#ongoing-schedule[open] summary::before { content: "▼ "; }
+#ongoing-schedule textarea {
+  width: 100%;
+  min-height: 200px;
+  margin-top: 10px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+#btn-copy-schedule {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* ─── 주간업무보고 페이지 ─────────────────────────── */
+.weekly-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.weekly-table th,
+.weekly-table td {
+  border: 1px solid var(--color-border);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.weekly-table thead th {
+  background: var(--color-surface-2);
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-border);
+}
+.weekly-table td > .cell-project {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 2px;
+}
+.weekly-table td > .cell-text {
+  width: 100%;
+  min-height: 60px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+}
+/* contenteditable div 가 비어있을 때 placeholder 같은 시각 단서 (옵션) */
+.weekly-table td > .cell-text:empty::before {
+  content: "";
+  display: inline-block;
+}
+/* focus 시 별도 외곽선 X, 셀 배경만 살짝 tint 해서 활성 상태 표시 */
+.weekly-table td:has(.cell-text:focus),
+.weekly-table td:has(.cell-project:focus) {
+  background: rgba(56, 189, 248, 0.06);
+}
+.weekly-table td > .cell-project:focus {
+  outline: none;
+}
+.weekly-table .row-del {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.weekly-table .row-del:hover {
+  color: #fca5a5;
+  border-color: var(--color-danger);
+}
+.weekly-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+#weekly-empty {
+  margin-top: 24px;
+  text-align: center;
+}
+
+/* ─── 이번달 타임시트 매트릭스 ───────────────────── */
+.modal-panel--wide {
+  width: min(96vw, 1400px) !important;
+}
+/* .modal-body 의 흰 배경(이메일/UpNote 미리보기용)을 매트릭스에서는 overrides */
+.modal-body.monthly-grid-body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0;
+  overflow: auto;
+}
+table.monthly-grid {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  width: max-content;
+  min-width: 100%;
+  color: var(--color-text);
+}
+table.monthly-grid th,
+table.monthly-grid td {
+  border: 1px solid var(--color-border);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+table.monthly-grid thead th {
+  position: sticky;
+  top: 0;
+  background: var(--actions-bar-bg);
+  color: var(--color-text);
+  z-index: 2;
+  font-weight: 700;
+}
+table.monthly-grid tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-weight: 700;
+}
+/* 좌측 task 컬럼 — 가독성 향상 위해 폭 확대 + 글자색 강화 */
+table.monthly-grid .task-col {
+  position: sticky;
+  left: 0;
+  background: var(--actions-bar-bg);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text);
+  z-index: 1;
+  min-width: 220px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 12px;
+}
+table.monthly-grid thead th.task-col,
+table.monthly-grid tfoot td.task-col {
+  z-index: 3;
+}
+/* 일 컬럼 — 31일까지 한 화면에 fit 시키기 위해 폭/패딩 컴팩트 */
+table.monthly-grid .day-col {
+  min-width: 30px;
+  width: 30px;
+  font-size: 12px;
+  padding: 4px 2px;
+}
+table.monthly-grid td.cell {
+  min-width: 30px;
+  padding: 4px 2px;
+}
+table.monthly-grid .day-col small {
+  color: var(--color-muted);
+  font-weight: 500;
+  font-size: 10px;
+}
+/* 우측 task 별 합계 컬럼 — 강조 */
+table.monthly-grid .total-col {
+  background: var(--color-surface-2);
+  font-weight: 700;
+  min-width: 56px;
+  color: var(--color-text);
+}
+/* 우상단 코너 (월 그랜드 토탈) — 가장 강조 */
+table.monthly-grid tfoot td.total-col {
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+}
+
+/* 토/일/공휴일 — 모두 동일한 붉은 톤 (사용자 요청: 토요일도 공휴일과 같은 색) */
+table.monthly-grid .day-col.sat,
+table.monthly-grid .day-col.sun,
+table.monthly-grid .day-col.hol,
+table.monthly-grid .day-col.sat small,
+table.monthly-grid .day-col.sun small,
+table.monthly-grid .day-col.hol small {
+  color: #fca5a5;
+}
+table.monthly-grid .day-col.hol,
+table.monthly-grid .day-col.hol small {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+/* 셀 배경 — 주말/공휴일 모두 같은 분홍 톤 */
+table.monthly-grid .cell.bg-wknd,
+table.monthly-grid .cell.bg-hol {
+  background: rgba(248, 113, 113, 0.08);
+}
+
+/* ─── 히트맵 셀 색상 ────────────────────────────── */
+/* 원칙: 다크 surface 위라 배경 alpha 가 낮을수록 surface 가 비쳐 흐림.
+   글자는 모든 단계에서 밝은 톤 유지 — 항상 contrast 확보. 강도는 배경
+   alpha 와 font-weight 로 표현한다. */
+table.monthly-grid td.cell {
+  transition: filter 120ms ease;
+  font-weight: 500;
+}
+table.monthly-grid td.cell:hover {
+  filter: brightness(1.25);
+}
+/* 빈 셀 (0h) — 값이 없어 color 영향 적지만, 만약 표시되면 dim */
+table.monthly-grid .cell.task-l0,
+table.monthly-grid .cell.vac-l0 { color: #4a525e; }
+
+/* task heatmap (cyan) — alpha 증가, 글자는 항상 밝은 흰-시안 */
+table.monthly-grid .cell.task-l1 {
+  background: rgba(56, 189, 248, 0.12);
+  color: #f0f9ff;  /* 거의 흰 — 옅은 bg 도 잘 보임 */
+  font-weight: 600;
+}
+table.monthly-grid .cell.task-l2 {
+  background: rgba(56, 189, 248, 0.30);
+  color: #f0f9ff;
+  font-weight: 600;
+}
+table.monthly-grid .cell.task-l3 {
+  background: rgba(56, 189, 248, 0.50);
+  color: #fff;
+  font-weight: 700;
+}
+table.monthly-grid .cell.task-l4 {
+  background: rgba(56, 189, 248, 0.72);
+  color: #fff;
+  font-weight: 700;
+}
+table.monthly-grid .cell.task-l5 {
+  background: rgba(244, 114, 182, 0.75);  /* 분홍 — overtime */
+  color: #fff;
+  font-weight: 800;
+}
+
+/* 휴가 heatmap (violet) — task 와 톤만 다르고 contrast 원칙은 동일 */
+table.monthly-grid .cell.vac-l1 {
+  background: rgba(167, 139, 250, 0.16);
+  color: #faf5ff;
+  font-weight: 600;
+}
+table.monthly-grid .cell.vac-l2 {
+  background: rgba(167, 139, 250, 0.36);
+  color: #faf5ff;
+  font-weight: 600;
+}
+table.monthly-grid .cell.vac-l3 {
+  background: rgba(167, 139, 250, 0.55);
+  color: #fff;
+  font-weight: 700;
+}
+table.monthly-grid .cell.vac-l4 {
+  background: rgba(167, 139, 250, 0.75);
+  color: #fff;
+  font-weight: 700;
+}
+table.monthly-grid .cell.vac-l5 {
+  background: rgba(167, 139, 250, 0.90);
+  color: #fff;
+  font-weight: 800;
+}
+
+/* 휴가 row 그룹 — task 와 시각 구분 */
+table.monthly-grid tr.vac-first td {
+  border-top: 2px solid var(--color-accent);
+}
+table.monthly-grid tr.vac-row .task-col {
+  color: #ddd6fe;  /* dark theme — 라일락 톤으로 contrast */
+  background: #2a2738;
+  font-weight: 600;
+}
+:root[data-theme="light"] table.monthly-grid tr.vac-row .task-col {
+  color: #6d28d9;  /* light theme — 진한 보라 */
+  background: #f3e8ff;
+}
+
+/* 라이트 모드 — heatmap 셀의 낮은 alpha 단계 텍스트 가독성 보정 */
+:root[data-theme="light"] table.monthly-grid .cell.task-l1,
+:root[data-theme="light"] table.monthly-grid .cell.task-l2 {
+  color: #075985;  /* 진한 시안 */
+}
+:root[data-theme="light"] table.monthly-grid .cell.vac-l1,
+:root[data-theme="light"] table.monthly-grid .cell.vac-l2 {
+  color: #5b21b6;  /* 진한 보라 */
+}
+:root[data-theme="light"] table.monthly-grid .cell.task-l0,
+:root[data-theme="light"] table.monthly-grid .cell.vac-l0 {
+  color: #cbd5e1;  /* 밝은 슬레이트 — 빈 셀 */
+}
+/* 토/일/공휴일 — 라이트 모드 가독성 (다크의 #fca5a5 는 너무 밝음) */
+:root[data-theme="light"] table.monthly-grid .day-col.sat,
+:root[data-theme="light"] table.monthly-grid .day-col.sun,
+:root[data-theme="light"] table.monthly-grid .day-col.hol,
+:root[data-theme="light"] table.monthly-grid .day-col.sat small,
+:root[data-theme="light"] table.monthly-grid .day-col.sun small,
+:root[data-theme="light"] table.monthly-grid .day-col.hol small {
+  color: #dc2626;
+}
+
+/* ─── 미리보기 모달 ─────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal[hidden] { display: none; }
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop-bg);
+}
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  width: min(900px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px var(--backdrop-bg);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 6px;
+}
+.modal-close:hover { color: var(--color-text); }
+.modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  background: #fff;
+  color: #111;
+  font-size: 13px;
+}
+.modal-actions {
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ─── settings 페이지 폼 ──────────────────────────── */
+/* scope 를 .settings-form 으로 제한 — 다른 페이지의 inline label 패턴 보호 */
+.settings-form label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+.settings-form label > input[type="text"],
+.settings-form label > input[type="number"],
+.settings-form label > input[type="password"],
+.settings-form label > textarea,
+.settings-form label > select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+/* label 밖에 있는 textarea (출력 템플릿: 팀장 보고 / UpNote 제목 / UpNote 본문) 도 100% */
+.settings-form section > textarea {
+  display: block;
+  width: 100%;
+}
+/* preview <pre> 도 동일 폭으로 — 미리보기 텍스트가 잘려 보이지 않게 */
+.settings-form section > pre {
+  width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin: 6px 0 0;
+}
+/* checkbox 줄은 inline 으로 — '활성화' 같은 토글에 적합 */
+.settings-form label.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin: 12px 0 4px;
+}
+.settings-form label.inline-check input[type="checkbox"] {
+  margin: 0;
+  width: auto;
+  display: inline-block;
+}
+/* 2 컬럼 그리드 안의 label 도 위 base 규칙을 그대로 따름 */
+.settings-form .form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.settings-form .form-grid-2 > label {
+  margin: 12px 0 0;
+}
+.settings-form .form-grid-2 > label:first-child,
+.settings-form .form-grid-2 > label:nth-child(2) {
+  margin-top: 0;
+}
+/* 짧은 inline label 들이 grid 안에서 같은 base-line 으로 정렬되도록 */
+.settings-form .actions-bar {
+  position: static;
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+  margin-top: 4px;
+  align-items: center;
+}
+.settings-form p.muted {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 일반 form 유틸리티 (settings 외에도 사용 가능) */
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.inline-check input[type="checkbox"] {
+  margin: 0;
+}
+.small {
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+/* ─── weekly report 행 ▲▼ 액션 ─────────────────── */
+.weekly-table .row-actions {
+  white-space: nowrap;
+}
+.weekly-table .row-move {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin-right: 2px;
+}
+.weekly-table .row-move:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+.weekly-table .row-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.weekly-table .row-vacation .cell-project {
+  color: var(--color-muted);
+  font-style: italic;
+}

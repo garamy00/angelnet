@@ -53,7 +53,7 @@ def test_build_url_percent_encodes_special_chars():
 
 
 def test_build_url_omits_notebook_when_empty():
-    """notebook_id 가 비어있으면 notebook 파라미터를 생략 (UpNote 기본 노트북에 저장)."""
+    """notebook_id 가 비어있으면 notebook 파라미터 생략 (UpNote 기본 노트북에 저장)."""
     url = upnote.build_new_note_url(title="t", text="b", notebook_id="")
     qs = parse_qs(urlsplit(url).query)
     assert "notebook" not in qs

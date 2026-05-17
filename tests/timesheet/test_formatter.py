@@ -28,7 +28,10 @@ def _seed_user_sample(conn: sqlite3.Connection) -> None:
             {
                 "category": "SKT SMSC 리빌딩",
                 "hours": 4.0,
-                "body_md": " - VM1.0.5 PKG 신규 통계(KCTHLR) 기능 개발\n   . 시험 및 패키지 배포",
+                "body_md": (
+                    " - VM1.0.5 PKG 신규 통계(KCTHLR) 기능 개발"
+                    "\n   . 시험 및 패키지 배포"
+                ),
             },
             {
                 "category": "EM 고도화",

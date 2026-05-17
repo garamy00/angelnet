@@ -4,33 +4,55 @@
   <meta charset="utf-8">
   <title>일일업무보고 — AngelDash</title>
   <link rel="stylesheet" href="/static/css/main.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <header>
     <nav>
-      <a href="/" class="active">📅 일일업무보고</a>
-      <a href="/projects.html">🗂 프로젝트</a>
-      <a href="/rooms.html">🗓 회의실예약</a>
-      <a href="/vacation.html">🏖 휴가조회</a>
-      <a href="/logs.html">📋 로그</a>
-      <a href="/settings.html">⚙️ 설정</a>
+      <a href="/" class="active"><i data-lucide="calendar-days"></i> 일일업무보고</a>
+      <a href="/weekly-report.html"><i data-lucide="bar-chart-3"></i> 주간업무보고</a>
+      <a href="/projects.html"><i data-lucide="folder"></i> 프로젝트</a>
+      <a href="/rooms.html"><i data-lucide="calendar"></i> 회의실예약</a>
+      <a href="/vacation.html"><i data-lucide="tent"></i> 휴가조회</a>
+      <a href="/logs.html"><i data-lucide="clipboard-list"></i> 로그</a>
+      <a href="/settings.html"><i data-lucide="settings"></i> 설정</a>
     </nav>
-    <span id="user-label" class="muted"></span>
+    <div class="header-right">
+      <span id="user-name" class="muted">로딩...</span>
+      <button id="btn-refresh" title="새로고침"><i data-lucide="refresh-cw"></i></button>
+    </div>
   </header>
-  <main>
+  <main class="with-sidebar">
+    <aside class="week-sidebar">
+      <div class="week-sidebar-header"><i data-lucide="calendar-days"></i> 저장된 일일업무보고</div>
+      <div id="week-sidebar-list" class="week-sidebar-list">
+        <div class="muted">로딩…</div>
+      </div>
+    </aside>
+    <div class="main-content">
+    <datalist id="category-suggestions"></datalist>
+    <details id="ongoing-schedule">
+      <summary>
+        <span><i data-lucide="pin"></i> 진행중인 일정</span>
+        <button id="btn-copy-schedule" title="전체 텍스트를 클립보드로 복사"><i data-lucide="clipboard-list"></i> 복사</button>
+      </summary>
+      <textarea id="ongoing-schedule-text"
+                placeholder="월간/주간 계획, 차주 예정 등 자유 형식. 일일/주간 보고에 복사해 쓰세요."></textarea>
+    </details>
+
     <section class="week-header">
       <button id="prev-week">◀ 이전 주</button>
       <span id="week-label">로딩…</span>
       <button id="this-week">이번 주</button>
       <button id="next-week">다음 주 ▶</button>
       <span class="spacer"></span>
-      <button id="btn-excel" title="이 주가 속한 달의 회사 시스템 Excel 다운로드">📥 다운로드</button>
+      <button id="btn-excel" title="이 주가 속한 달의 회사 시스템 Excel 다운로드"><i data-lucide="download"></i> 다운로드</button>
     </section>
 
     <section id="days"></section>
 
     <section class="week-notes">
-      <h3>📝 이번 주 메모 (UpNote 동기화에만 포함)</h3>
+      <h3><i data-lucide="file-text"></i> 이번 주 메모(UpNote/Notion 에 저장됨)</h3>
       <textarea class="meta-misc" id="week-note" placeholder="자유 메모…"></textarea>
     </section>
 
@@ -41,18 +63,35 @@
           <option value="week">이번 주 전체</option>
           <option value="today">오늘만</option>
         </select>
-        <button class="primary" id="btn-timesheet">📤 타임시트 입력</button>
-        <button id="btn-verify" title="회사 시스템 시간과 비교">🔍 타임시트 확인</button>
+        <button class="primary" id="btn-timesheet"><i data-lucide="send"></i> 타임시트 입력</button>
+        <button id="btn-verify" title="회사 시스템 시간과 비교"><i data-lucide="search"></i> 타임시트 확인</button>
+        <button id="btn-monthly-preview"
+              title="이번달 task × 일자 매트릭스 (회사 시스템 fetch)"><i data-lucide="table"></i> 이번달 미리보기</button>
       </div>
 
       <div class="action-group">
-        <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성">🔄 UpNote 저장 (주)</button>
+        <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성"><i data-lucide="refresh-cw"></i> UpNote 저장</button>
       </div>
 
       <div class="action-group">
-        <button class="primary" id="btn-notion" title="이번 주 엔트리를 Notion DB 에 동기화 (중복 시 업데이트)">🔄 Notion 동기화 (주)</button>
+        <button class="primary" id="btn-notion" title="이번 주 엔트리를 Notion DB 에 동기화 (중복 시 업데이트)"><i data-lucide="refresh-cw"></i> Notion 동기화</button>
       </div>
     </section>
+
+    <!-- 이번달 타임시트 매트릭스 모달 -->
+    <div id="monthly-modal" class="modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel modal-panel--wide">
+        <div class="modal-header">
+          <strong id="monthly-modal-title"><i data-lucide="table"></i> 이번달 타임시트</strong>
+          <button id="monthly-modal-close" class="modal-close" title="닫기">×</button>
+        </div>
+        <div id="monthly-modal-body" class="modal-body monthly-grid-body">
+          <p class="muted">로딩…</p>
+        </div>
+      </div>
+    </div>
+    </div>
   </main>
   <script type="module" src="/static/js/main.js"></script>
 </body>

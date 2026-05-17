@@ -8,10 +8,8 @@ FastAPI 인스턴스에 타임시트/보고서 관련 라우트를 추가한다.
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
 from datetime import date, timedelta
-from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel, Field
@@ -20,7 +18,7 @@ from . import db as db_module
 from . import formatter as fmt_module
 from .client import TimesheetClient
 from .misc_auto import generate_misc_auto
-from .models import DailyMetaInput, EntryInput, ProjectInput, User, WeekNoteInput
+from .models import DailyMetaInput, EntryInput, ProjectInput, WeekNoteInput
 from .templates import DEFAULT_TEAM_REPORT, DEFAULT_UPNOTE_BODY, DEFAULT_UPNOTE_TITLE
 
 
@@ -36,6 +34,7 @@ class MappingInput(BaseModel):
 
     project_id: int | None = None
     excluded: bool = False
+    weekly_project_name: str | None = None
 
 
 class SettingsPreviewInput(BaseModel):
@@ -45,6 +44,26 @@ class SettingsPreviewInput(BaseModel):
     template: str
     date: str | None = None
     week_iso: str | None = None
+
+
+class EmailPasswordInput(BaseModel):
+    """PUT /api/settings/email-password 페이로드.
+
+    빈 문자열이면 Keychain 항목 삭제 의도로 해석.
+    """
+
+    password: str
+
+
+class EmailSendWeeklyInput(BaseModel):
+    """POST /api/actions/email-send-weekly 페이로드.
+
+    override_to / override_cc 가 주어지면 설정값 대신 사용 (받는사람 확인 시 수정 가능).
+    """
+
+    week_iso: str
+    override_to: str | None = None
+    override_cc: str | None = None
 
 
 class TeamReportActionInput(BaseModel):
@@ -88,6 +107,34 @@ class TimesheetPushOneInput(BaseModel):
     date: str  # 'YYYY-MM-DD'
     task_name: str
     hours: float  # 0 이면 그 셀 삭제와 동일
+    # 회사 시스템에 같은 name 의 task 가 work_type 만 달라 여러 개 등록될 수
+    # 있어 (예: '행정 [개발]', '행정 [세미나]') 정확한 매칭에 필수.
+    # 호환을 위해 optional; 비면 name 만으로 매칭 (기존 동작).
+    task_work_type: str = ""
+
+
+class WeeklyReportInput(BaseModel):
+    """PUT /api/weekly-reports/{week_iso} 페이로드."""
+
+    rows: list[dict]
+
+
+class WeeklyReportGenerateInput(BaseModel):
+    """POST /api/weekly-reports/{week_iso}/generate 페이로드."""
+
+    preserve_manual: bool = True
+
+
+class WeeklyReportUpnoteInput(BaseModel):
+    """POST /api/actions/weekly-report-upnote 페이로드."""
+
+    week_iso: str
+
+
+class WeeklyReportNotionInput(BaseModel):
+    """POST /api/actions/weekly-report-notion 페이로드."""
+
+    week_iso: str
 
 
 class PatternMappingInput(BaseModel):
@@ -138,12 +185,50 @@ def register_routes(app: FastAPI) -> None:
 
     # ─── Reports API ────────────────────────────────
 
+    @app.get("/api/weeks/index")
+    async def list_weeks_index_route(conn=Depends(get_conn)) -> list[dict]:
+        """일일업무보고 사이드바용 — 데이터가 있는 주차 list (최신순).
+
+        days 테이블에 entry 가 있는 week 또는 week_notes 가 채워진 week 포함.
+        """
+        rows = conn.execute(
+            "SELECT DISTINCT week_iso FROM ("
+            "  SELECT week_iso FROM days "
+            "  WHERE EXISTS (SELECT 1 FROM entries e WHERE e.date = days.date)"
+            "  UNION "
+            "  SELECT week_iso FROM week_notes WHERE TRIM(body_md) != ''"
+            ") "
+            "ORDER BY week_iso DESC"
+        ).fetchall()
+        return [{"week_iso": r["week_iso"]} for r in rows]
+
     @app.get("/api/weeks/{week_iso}")
     async def get_week_route(
         week_iso: str, conn=Depends(get_conn)
     ) -> dict:
         days = db_module.get_week(conn, week_iso)
         return {"week_iso": week_iso, "days": days}
+
+    @app.get("/api/categories/recent")
+    async def list_recent_categories(
+        days: int = 14, conn=Depends(get_conn),
+    ) -> list[str]:
+        """최근 N일간 사용한 distinct 카테고리 — 최근 사용 순.
+
+        카테고리 입력 자동완성용. datalist 로 노출되어 사용자가 자유 입력
+        가능하면서 동시에 최근 항목을 빠르게 선택 가능.
+        """
+        import datetime as _dt
+        cutoff = (_dt.date.today() - _dt.timedelta(days=days)).isoformat()
+        rows = conn.execute(
+            "SELECT category, MAX(date) AS last_date "
+            "FROM entries "
+            "WHERE date >= ? AND TRIM(category) != '' "
+            "GROUP BY category "
+            "ORDER BY last_date DESC, category",
+            (cutoff,),
+        ).fetchall()
+        return [r["category"] for r in rows]
 
     @app.get("/api/days/{date}")
     async def get_day_route(date: str, conn=Depends(get_conn)) -> dict:
@@ -190,6 +275,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> dict:
         """그 날 기준 자동 '기타' 문구 생성."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         try:
@@ -304,6 +390,7 @@ def register_routes(app: FastAPI) -> None:
             category,
             project_id=payload.project_id,
             excluded=payload.excluded,
+            weekly_project_name=payload.weekly_project_name,
         )
         return {"ok": True}
 
@@ -330,6 +417,7 @@ def register_routes(app: FastAPI) -> None:
         payload: PatternMappingInput, conn=Depends(get_conn)
     ) -> dict:
         import sqlite3 as _sqlite3
+
         from fastapi import HTTPException
         try:
             pmid = db_module.create_pattern_mapping(
@@ -360,6 +448,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> dict:
         """연간 휴가 사용/잔여 일수 요약."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         y = year or _dt.date.today().year
@@ -375,6 +464,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> list[dict]:
         """연간 휴가계 목록 (조회 전용)."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         y = year or _dt.date.today().year
@@ -399,6 +489,7 @@ def register_routes(app: FastAPI) -> None:
         year_month: 'YYYY-MM' (없으면 오늘 기준 현재 달).
         """
         import datetime as _dt
+
         from fastapi import HTTPException
 
         ym = year_month or _dt.date.today().strftime("%Y-%m")
@@ -609,39 +700,68 @@ def register_routes(app: FastAPI) -> None:
                 items.append({**e, "sync_status": "excluded"})
                 continue
             project = conn.execute(
-                "SELECT name, remote_id FROM projects WHERE id = ?",
+                "SELECT name, remote_id, work_type FROM projects WHERE id = ?",
                 (m["project_id"],),
             ).fetchone()
             task_name = (
                 (project["remote_id"] or "").strip() if project else ""
             )
+            task_work_type = (
+                (project["work_type"] or "").strip() if project else ""
+            )
             if not task_name:
                 items.append({**e, "sync_status": "no_remote_id"})
                 continue
-            to_check.append({**e, "task_name": task_name})
+            to_check.append({
+                **e, "task_name": task_name, "task_work_type": task_work_type,
+            })
             needed_months.add(e["date"][:7])
 
-        # 월별 search.json grid 호출
-        grids: dict[str, dict[str, dict[int, float]]] = {}
+        # 월별 detailed grid 호출 — (task_name, work_type) 분리 보존.
+        # 회사 시스템에 같은 name 두 task (work_type 만 다름) 가 등록된 경우
+        # name-only grid 는 둘을 합쳐 잘못된 비교를 만든다.
+        # grids[ym][(name, work_type)] = {day: hours}
+        grids: dict[str, dict[tuple[str, str], dict[int, float]]] = {}
         for ym in sorted(needed_months):
             try:
-                grids[ym] = await client.fetch_jobtime_grid(year_month=ym)
+                rows_detailed = await client.fetch_jobtime_grid_detailed(
+                    year_month=ym,
+                )
             except Exception as exc:
                 raise HTTPException(500, f"verify({ym}): {exc}") from exc
+            per_month: dict[tuple[str, str], dict[int, float]] = {}
+            for row in rows_detailed:
+                key = (
+                    row.get("task_name", ""),
+                    (row.get("work_type") or "").strip(),
+                )
+                per_month[key] = row.get("days", {})
+            grids[ym] = per_month
 
-        # 한 날에 여러 entries 가 같은 task 로 매핑될 수 있으므로
-        # (date, task_name) 단위로 도구 hours 를 합산하여 회사 시스템과 비교한다.
-        local_totals: dict[tuple[str, str], float] = {}
+        def _remote_hours(ym: str, name: str, wt: str, day: int) -> float:
+            """(name, wt) 정확 매칭 → 없으면 name 만으로 합산 (legacy fallback)."""
+            month = grids.get(ym, {})
+            exact = month.get((name, wt))
+            if exact is not None:
+                return exact.get(day, 0.0)
+            total = 0.0
+            for (n, _wt), days in month.items():
+                if n == name:
+                    total += days.get(day, 0.0)
+            return total
+
+        # (date, task_name, task_work_type) 로 도구 hours 합산
+        local_totals: dict[tuple[str, str, str], float] = {}
         for e in to_check:
-            key = (e["date"], e["task_name"])
+            key = (e["date"], e["task_name"], e.get("task_work_type") or "")
             local_totals[key] = local_totals.get(key, 0.0) + e["hours"]
 
         for e in to_check:
             ym = e["date"][:7]
             day = int(e["date"].split("-")[2])
-            grid = grids.get(ym, {})
-            remote = grid.get(e["task_name"], {}).get(day, 0.0)
-            local_total = local_totals[(e["date"], e["task_name"])]
+            wt = e.get("task_work_type") or ""
+            remote = _remote_hours(ym, e["task_name"], wt, day)
+            local_total = local_totals[(e["date"], e["task_name"], wt)]
             entry = {
                 **e,
                 "remote_hours": remote,
@@ -657,7 +777,7 @@ def register_routes(app: FastAPI) -> None:
                 entry["sync_status"] = "mismatch"
             items.append(entry)
 
-        # ─── orphan 검출: 회사 grid 에 있는데 도구 entries 에 없는 (date, task) ───
+        # orphan 검출 — 회사 grid 에만 있고 도구 entries 에 없는 (date, task[+wt])
         import datetime as _dt
         year_str, w_str = week_iso.split("-W")
         try:
@@ -668,14 +788,26 @@ def register_routes(app: FastAPI) -> None:
         except ValueError:
             week_dates_set = set()
 
-        local_keys = {(e["date"], e["task_name"]) for e in to_check}
-        for ym, grid in grids.items():
+        local_keys = {
+            (e["date"], e["task_name"], e.get("task_work_type") or "")
+            for e in to_check
+        }
+        # legacy fallback: project.work_type='' (work_type 미지정) 매핑은
+        # _remote_hours 가 name-only 로 합산하므로, orphan 검사도 동일하게
+        # 그 (date, name) 은 어떤 wt 와도 일치한 것으로 간주해 false positive 회피.
+        local_name_only = {
+            (e["date"], e["task_name"])
+            for e in to_check
+            if not (e.get("task_work_type") or "")
+        }
+        for ym, month in grids.items():
             try:
                 y_int = int(ym.split("-")[0])
                 m_int = int(ym.split("-")[1])
             except (ValueError, IndexError):
                 continue
-            for task_name, day_hours in grid.items():
+            for (task_name, wt), day_hours in month.items():
+                display = f"{task_name} [{wt}]" if wt else task_name
                 for day, h in day_hours.items():
                     if h <= 0:
                         continue
@@ -685,12 +817,15 @@ def register_routes(app: FastAPI) -> None:
                         continue
                     if date_iso not in week_dates_set:
                         continue
-                    if (date_iso, task_name) in local_keys:
+                    if (date_iso, task_name, wt) in local_keys:
                         continue
+                    if (date_iso, task_name) in local_name_only:
+                        continue  # legacy 매핑이 이미 cover
                     items.append({
                         "date": date_iso,
-                        "category": task_name,
+                        "category": display,
                         "task_name": task_name,
+                        "task_work_type": wt,
                         "hours": 0.0,
                         "body_md": "",
                         "remote_hours": h,
@@ -701,8 +836,9 @@ def register_routes(app: FastAPI) -> None:
         return {"items": items, "week_iso": week_iso}
 
     # ─── Timesheet Excel 다운로드 (read-only proxy) ────
-    from fastapi.responses import Response as _FastAPIResponse
     from urllib.parse import quote as _quote
+
+    from fastapi.responses import Response as _FastAPIResponse
 
     @app.get("/api/timesheet/excel")
     async def download_excel_route(
@@ -729,6 +865,145 @@ def register_routes(app: FastAPI) -> None:
             headers={"Content-Disposition": cd},
         )
 
+    @app.get("/api/timesheet/monthly-grid")
+    async def monthly_grid_route(
+        year_month: str,
+        conn=Depends(get_conn),
+        client: TimesheetClient = Depends(get_client),
+    ) -> dict:
+        """그 달의 task×day 매트릭스 + 휴가 + 공휴일 (회사 시스템 fetch).
+
+        - tasks: 합계가 0 인 항목은 제외 (회사 시스템에 등록만 되고 입력 없는 task)
+        - vacations: 연차/반차 등을 type 별로 그룹화한 별도 row 들
+            연차/공가/경조사/휴직 → 8h, 반차(오전/오후)·공가(오전/오후) → 4h
+        - holidays: '출근일로 취급' label 을 제외한 진짜 공휴일 일자 set
+        """
+        import datetime as _dt
+        from calendar import monthrange
+
+        from fastapi import HTTPException
+
+        try:
+            year_s, month_s = year_month.split("-")
+            year, month = int(year_s), int(month_s)
+        except ValueError as exc:
+            raise HTTPException(
+                400, f"invalid year_month: {year_month}",
+            ) from exc
+        days_in_month = monthrange(year, month)[1]
+
+        # 회사 시스템 fetch — grid 가 핵심, 나머지는 실패해도 본 응답 유지.
+        # detailed 호출로 task_name + work_type 분리 보존 ('[개발]', '[세미나]' 등).
+        try:
+            grid_rows = await client.fetch_jobtime_grid_detailed(
+                year_month=year_month,
+            )
+        except Exception as exc:
+            raise HTTPException(500, f"monthly grid fetch failed: {exc}") from exc
+
+        vacations_raw: list[dict] = []
+        holidays_raw: list[dict] = []
+        try:
+            vacations_raw = await client.list_vacations(year_month=year_month)
+        except Exception as exc:
+            logger.warning("monthly_grid: vacation fetch failed: %s", exc)
+        try:
+            holidays_raw = await client.list_holidays(year_month=year_month)
+        except Exception as exc:
+            logger.warning("monthly_grid: holiday fetch failed: %s", exc)
+
+        # 출근일로 취급할 공휴일 label 집합 (설정값)
+        exclude_raw = db_module.get_setting(
+            conn, "misc.holiday_exclude_labels"
+        ) or ""
+        exclude_labels = {
+            s.strip() for s in exclude_raw.replace("\n", ",").split(",")
+            if s.strip()
+        }
+
+        # 진짜 공휴일 일자 list (출근일 제외)
+        holidays_out: list[dict] = []
+        for h in holidays_raw:
+            label = (h.get("label") or "").strip()
+            if label in exclude_labels:
+                continue
+            date_iso = h.get("date") or ""
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+            except ValueError:
+                continue
+            if d.year != year or d.month != month:
+                continue
+            holidays_out.append({"day": d.day, "label": label})
+
+        # tasks 집계 — 합계 0 제외. 라벨은 client 가 만든 'label' 필드 그대로.
+        tasks: list[dict] = []
+        daily_totals: dict[int, float] = {}
+        month_total = 0.0
+        for row in sorted(grid_rows, key=lambda r: r.get("label") or ""):
+            days = row.get("days", {})
+            task_total = round(sum(days.values()), 2)
+            if task_total <= 0:
+                continue  # 모두 0 인 task hide
+            month_total += task_total
+            for day, hours in days.items():
+                daily_totals[day] = round(
+                    daily_totals.get(day, 0.0) + hours, 2,
+                )
+            tasks.append({
+                "task_name": row.get("label") or row.get("task_name") or "",
+                "days": days,
+                "total": task_total,
+            })
+
+        # 휴가 — type 별 그룹화 후 반차는 4h, 그 외는 8h 적용
+        # type 라벨은 misc_auto._VAC_TYPE_LABEL 와 동일하게 한국어 표시명으로 변환
+        from . import misc_auto as ma_module
+        half_types = (
+            ma_module._AM_HALF_TYPES | ma_module._PM_HALF_TYPES
+        )
+        by_label: dict[str, dict[int, float]] = {}
+        label_order: list[str] = []
+        for v in vacations_raw:
+            vac_type = v.get("type") or ""
+            date_iso = v.get("date") or ""
+            try:
+                d = _dt.date.fromisoformat(date_iso)
+            except ValueError:
+                continue
+            if d.year != year or d.month != month:
+                continue
+            label = ma_module._label_for_type(vac_type)
+            hours = 4.0 if vac_type in half_types else 8.0
+            if label not in by_label:
+                by_label[label] = {}
+                label_order.append(label)
+            by_label[label][d.day] = hours
+
+        vacations_out: list[dict] = []
+        for label in label_order:
+            days = by_label[label]
+            total = round(sum(days.values()), 2)
+            vacations_out.append({
+                "label": label, "days": days, "total": total,
+            })
+            # 일별 합계에도 휴가 시간을 포함 (사용자가 8h/4h 매일 합 확인 가능)
+            for day, hours in days.items():
+                daily_totals[day] = round(
+                    daily_totals.get(day, 0.0) + hours, 2,
+                )
+            month_total += total
+
+        return {
+            "year_month": year_month,
+            "tasks": tasks,
+            "vacations": vacations_out,
+            "holidays": holidays_out,
+            "daily_totals": daily_totals,
+            "month_total": round(month_total, 2),
+            "days_in_month": days_in_month,
+        }
+
     # ─── Vacations / Holidays (read-only) ──────────
 
     @app.get("/api/vacations")
@@ -739,6 +1014,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> list[dict]:
         """그 달의 휴가 정보를 회사 시스템에서 가져온다 (read-only)."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         ym = year_month or _dt.date.today().strftime("%Y-%m")
@@ -755,6 +1031,7 @@ def register_routes(app: FastAPI) -> None:
     ) -> list[dict]:
         """그 달의 공휴일 정보를 회사 시스템에서 가져온다 (read-only)."""
         import datetime as _dt
+
         from fastapi import HTTPException
 
         ym = year_month or _dt.date.today().strftime("%Y-%m")
@@ -763,16 +1040,448 @@ def register_routes(app: FastAPI) -> None:
         except Exception as exc:
             raise HTTPException(500, str(exc)) from exc
 
+    # ─── Weekly Report API ───────────────────────────────
+
+    from . import weekly_table as weekly_module
+
+    @app.get("/api/weekly-reports")
+    async def list_weekly_reports_route(
+        conn=Depends(get_conn),
+    ) -> list[dict]:
+        """주간업무보고 사이드바용 — 저장된 보고서 list (최신순).
+
+        weekly_reports 테이블의 모든 row 의 week_iso 와 updated_at 만 반환.
+        """
+        rows = conn.execute(
+            "SELECT week_iso, updated_at FROM weekly_reports "
+            "ORDER BY week_iso DESC"
+        ).fetchall()
+        return [
+            {"week_iso": r["week_iso"], "updated_at": r["updated_at"]}
+            for r in rows
+        ]
+
+    @app.get("/api/weekly-reports/{week_iso}")
+    async def get_weekly_report_route(
+        week_iso: str, conn=Depends(get_conn)
+    ) -> dict:
+        return db_module.get_weekly_report(conn, week_iso)
+
+    @app.put("/api/weekly-reports/{week_iso}")
+    async def put_weekly_report_route(
+        week_iso: str,
+        payload: WeeklyReportInput,
+        conn=Depends(get_conn),
+    ) -> dict:
+        updated_at = db_module.upsert_weekly_report(conn, week_iso, payload.rows)
+        return {"ok": True, "updated_at": updated_at}
+
+    @app.post("/api/weekly-reports/{week_iso}/generate")
+    async def generate_weekly_report_route(
+        week_iso: str,
+        payload: WeeklyReportGenerateInput,
+        conn=Depends(get_conn),
+        client: TimesheetClient = Depends(get_client),
+    ) -> dict:
+        import datetime as _dt
+
+        existing = db_module.get_weekly_report(conn, week_iso)
+        preserve = existing["rows"] if payload.preserve_manual else None
+
+        # 지난주/이번주 가 걸친 모든 month 휴가 fetch (set 으로 중복 제거)
+        year_s, w_s = week_iso.split("-W")
+        this_monday = _dt.date.fromisocalendar(int(year_s), int(w_s), 1)
+        this_friday = this_monday + _dt.timedelta(days=4)
+        last_monday = this_monday - _dt.timedelta(days=7)
+        last_friday = last_monday + _dt.timedelta(days=4)
+        months = {
+            d.strftime("%Y-%m")
+            for d in (last_monday, last_friday, this_monday, this_friday)
+        }
+        all_vacations: list[dict] = []
+        for ym in sorted(months):
+            try:
+                all_vacations.extend(await client.list_vacations(year_month=ym))
+            except Exception as exc:
+                # 휴가 fetch 실패는 경고만 — 본문은 그대로 생성
+                logger.warning(
+                    "weekly_generate: vacation fetch failed ym=%s err=%s",
+                    ym, exc,
+                )
+
+        # author_name: 설정 우선, 비면 client 캐시된 user.name
+        author_name = (
+            db_module.get_setting(conn, "report.author_name") or ""
+        ).strip()
+        if not author_name and getattr(client, "_user", None):
+            author_name = client._user.name or ""
+
+        rows = weekly_module.build_weekly_table_rows(
+            conn, week_iso=week_iso, preserve_manual_rows=preserve,
+            vacations=all_vacations, author_name=author_name,
+        )
+        updated_at = db_module.upsert_weekly_report(conn, week_iso, rows)
+        return {"week_iso": week_iso, "rows": rows, "updated_at": updated_at}
+
+    @app.post("/api/actions/weekly-report-upnote")
+    async def action_weekly_report_upnote(
+        payload: WeeklyReportUpnoteInput, conn=Depends(get_conn),
+    ) -> dict:
+        from fastapi import HTTPException
+
+        from . import upnote as upnote_module
+
+        notebook_id = (
+            db_module.get_setting(conn, "upnote.weekly_notebook_id") or ""
+        )
+        if not notebook_id:
+            raise HTTPException(
+                400,
+                "upnote.weekly_notebook_id 가 설정되지 않았습니다. "
+                "설정 페이지에서 주간업무보고 노트북 ID 를 먼저 등록하세요.",
+            )
+
+        # 주간업무보고 전용 제목 템플릿 (일일과 분리)
+        title_template = (
+            db_module.get_setting(conn, "upnote.weekly_title_template")
+            or SETTING_DEFAULTS["upnote.weekly_title_template"]
+        )
+        # 주간업무보고는 markdown 표가 필수 — 사용자 setting (일일보고용
+        # markdown=false / wrap=true) 을 무시하고 항상 markdown 렌더 + wrap off.
+        markdown = True
+
+        wr = db_module.get_weekly_report(conn, payload.week_iso)
+        rows = wr["rows"]
+        if not rows:
+            raise HTTPException(
+                400, "이 주의 보고서가 비어있습니다. 먼저 생성/편집하세요.",
+            )
+
+        ctx_globals = fmt_module._week_globals(payload.week_iso)
+        try:
+            title = fmt_module.render_upnote_title(title_template, ctx_globals)
+        except Exception as exc:
+            db_module.log_action(
+                conn, "weekly_report_upnote", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(400, str(exc)) from exc
+
+        # 주간업무보고는 markdown 표로 발송 — UpNote 의 markdown 렌더가
+        # 처리하도록 위에서 markdown=True / wrap=False 로 강제 설정.
+        # 셀 안 줄바꿈은 <br>, 들여쓰기 spaces 는 &nbsp; 로 변환되어 보존됨.
+        text = weekly_module.render_markdown_table(rows)
+
+        try:
+            url = upnote_module.open_new_note(
+                title=title, text=text,
+                notebook_id=notebook_id, markdown=markdown,
+            )
+            logger.info("Weekly UpNote url: %s", url[:300])
+        except Exception as exc:
+            db_module.log_action(
+                conn, "weekly_report_upnote", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(500, str(exc)) from exc
+
+        db_module.log_action(
+            conn, "weekly_report_upnote", payload.week_iso, "ok",
+            f"title={title}",
+        )
+        return {"title": title, "text": text, "opened": True}
+
+    @app.post("/api/actions/weekly-report-notion")
+    async def action_weekly_report_notion(
+        payload: WeeklyReportNotionInput, conn=Depends(get_conn),
+    ) -> dict:
+        """주간업무보고 → Notion DB 의 한 행 (Week, Date) + 본문 markdown table.
+
+        같은 Week 행이 있으면 update, 없으면 create.
+        """
+        from fastapi import HTTPException
+        from . import notion as notion_module
+        from .._common.auth import KeychainStore
+        import datetime as _dt
+        import os as _os
+
+        enabled = (
+            db_module.get_setting(conn, "notion.weekly_report_enabled") or "false"
+        ).strip().lower() == "true"
+        if not enabled:
+            raise HTTPException(
+                400, "notion.weekly_report_enabled 가 false 입니다",
+            )
+        db_id = (
+            db_module.get_setting(conn, "notion.weekly_report_db_id") or ""
+        ).strip()
+        if not db_id:
+            raise HTTPException(
+                400,
+                "notion.weekly_report_db_id 가 설정되지 않았습니다. "
+                "설정 페이지에서 주간보고용 Notion DB ID 를 먼저 등록하세요.",
+            )
+
+        user_id = _os.environ.get("ANGELNET_USER", "")
+        if not user_id:
+            raise HTTPException(500, "ANGELNET_USER not set")
+        token = KeychainStore(
+            account=user_id, service="angeldash-notion",
+        ).get()
+        if not token:
+            raise HTTPException(
+                400, "Notion 토큰이 키체인에 없습니다. 설정 페이지에서 저장하세요.",
+            )
+
+        title_prop = (
+            db_module.get_setting(conn, "notion.weekly_report_prop_title")
+            or "Week"
+        )
+        date_prop = (
+            db_module.get_setting(conn, "notion.weekly_report_prop_date")
+            or "Date"
+        )
+
+        # rows 로 native Notion 표 빌드 (markdown 코드블록 X — 진짜 표로 렌더)
+        wr = db_module.get_weekly_report(conn, payload.week_iso)
+        rows = wr["rows"]
+        if not rows:
+            raise HTTPException(
+                400, "이 주의 보고서가 비어있습니다. 먼저 생성/편집하세요.",
+            )
+        headers, table_rows = weekly_module.render_table_cells(rows)
+
+        # 주 월요일 ISO
+        try:
+            yr, wk = payload.week_iso.split("-W")
+            monday_iso = _dt.date.fromisocalendar(int(yr), int(wk), 1).isoformat()
+        except (ValueError, IndexError):
+            monday_iso = ""
+
+        properties = {
+            title_prop: notion_module.title_prop(payload.week_iso),
+        }
+        if monday_iso:
+            properties[date_prop] = notion_module.date_prop(monday_iso)
+        children = [notion_module.table_block(headers, table_rows)]
+
+        try:
+            async with notion_module.NotionClient(token) as nc:
+                existing = await nc.query_database(
+                    db_id,
+                    filter=notion_module.filter_by_title(
+                        title_prop_name=title_prop, value=payload.week_iso,
+                    ),
+                )
+                if existing:
+                    page_id = existing[0]["id"]
+                    await nc.update_page(page_id, properties=properties)
+                    await nc.replace_page_children(page_id, children=children)
+                    action = "updated"
+                else:
+                    await nc.create_page(
+                        database_id=db_id, properties=properties,
+                        children=children,
+                    )
+                    action = "created"
+        except notion_module.NotionError as exc:
+            db_module.log_action(
+                conn, "weekly_report_notion", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(502, str(exc)) from exc
+
+        db_module.log_action(
+            conn, "weekly_report_notion", payload.week_iso, "ok", action,
+        )
+        return {"action": action, "week_iso": payload.week_iso}
+
+    # ─── Email SMTP API ────────────────────────────────
+    # password 는 Keychain (service="angeldash-email", account=email.username) 에 저장.
+    # settings 테이블에는 평문 password 를 두지 않는다.
+    from .._common.auth import KeychainStore
+
+    EMAIL_KEYCHAIN_SERVICE = "angeldash-email"
+
+    def _email_keychain(username: str) -> KeychainStore:
+        # username 이 비어있으면 의미 있는 항목이 아니므로 caller 가 가드.
+        return KeychainStore(account=username, service=EMAIL_KEYCHAIN_SERVICE)
+
+    def _load_smtp_config(conn) -> tuple[object, str, str]:
+        """settings + Keychain 에서 SMTP 파라미터 로드. 부족하면 HTTPException(400).
+
+        Returns: (SmtpConfig, from_addr, signature_html).
+        """
+        from fastapi import HTTPException
+
+        from . import email_smtp as smtp_module
+
+        enabled = (
+            db_module.get_setting(conn, "email.enabled") or "false"
+        ).lower()
+        if enabled != "true":
+            raise HTTPException(
+                400, "이메일 발송이 비활성화되어 있습니다 (설정에서 활성화)",
+            )
+
+        host = (db_module.get_setting(conn, "email.smtp_host") or "").strip()
+        port_raw = (db_module.get_setting(conn, "email.smtp_port") or "0").strip()
+        tls = (
+            db_module.get_setting(conn, "email.smtp_tls") or "true"
+        ).lower() == "true"
+        username = (db_module.get_setting(conn, "email.username") or "").strip()
+        from_addr = (db_module.get_setting(conn, "email.from") or username).strip()
+        signature_html = db_module.get_setting(conn, "email.signature_html") or ""
+
+        if not host or not username:
+            raise HTTPException(400, "SMTP host/username 이 설정되지 않았습니다")
+        try:
+            port = int(port_raw)
+        except ValueError as exc:
+            raise HTTPException(
+                400, f"SMTP port 가 숫자가 아닙니다: {port_raw}",
+            ) from exc
+
+        password = _email_keychain(username).get()
+        if not password:
+            raise HTTPException(
+                400, "SMTP password 가 Keychain 에 저장되지 않았습니다",
+            )
+
+        return (
+            smtp_module.SmtpConfig(
+                host=host, port=port, use_tls=tls,
+                username=username, password=password,
+            ),
+            from_addr,
+            signature_html,
+        )
+
+    @app.put("/api/settings/email-password")
+    async def put_email_password_route(
+        payload: EmailPasswordInput, conn=Depends(get_conn),
+    ) -> dict:
+        """SMTP password 를 Keychain 에 저장. account = email.username 설정값."""
+        from fastapi import HTTPException
+
+        username = (db_module.get_setting(conn, "email.username") or "").strip()
+        if not username:
+            raise HTTPException(
+                400, "먼저 email.username 을 설정 후 password 를 등록하세요",
+            )
+        try:
+            _email_keychain(username).save(payload.password)
+        except RuntimeError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/api/settings/email-password-status")
+    async def get_email_password_status_route(conn=Depends(get_conn)) -> dict:
+        """저장 여부만 반환 (값은 절대 응답에 넣지 않는다)."""
+        username = (db_module.get_setting(conn, "email.username") or "").strip()
+        if not username:
+            return {"has_password": False, "username": ""}
+        present = _email_keychain(username).get() is not None
+        return {"has_password": present, "username": username}
+
+    @app.post("/api/actions/email-test")
+    async def action_email_test_route(conn=Depends(get_conn)) -> dict:
+        """SMTP 연결 + 인증만 검증. 실제 발송 없음."""
+        from fastapi import HTTPException
+
+        from . import email_smtp as smtp_module
+
+        cfg, _from_addr, _sig = _load_smtp_config(conn)
+        try:
+            smtp_module.verify_connection(cfg)
+        except smtp_module.SmtpError as exc:
+            db_module.log_action(conn, "email_test", "", "fail", str(exc))
+            raise HTTPException(400, str(exc)) from exc
+        db_module.log_action(conn, "email_test", "", "ok", f"host={cfg.host}")
+        return {"ok": True}
+
+    @app.post("/api/actions/email-send-weekly")
+    async def action_email_send_weekly_route(
+        payload: EmailSendWeeklyInput, conn=Depends(get_conn),
+    ) -> dict:
+        """주간업무보고를 이메일로 발송. 받는사람은 override 가능."""
+        from fastapi import HTTPException
+
+        from . import email_smtp as smtp_module
+
+        cfg, from_addr, signature_html = _load_smtp_config(conn)
+
+        # 받는사람 결정: override 가 있으면 우선, 없으면 설정값
+        to_raw = (
+            payload.override_to
+            if payload.override_to is not None
+            else db_module.get_setting(conn, "email.to") or ""
+        )
+        cc_raw = (
+            payload.override_cc
+            if payload.override_cc is not None
+            else db_module.get_setting(conn, "email.cc") or ""
+        )
+        to_list, cc_list = smtp_module.parse_recipients(to_raw, cc_raw)
+        if not to_list:
+            raise HTTPException(400, "받는사람(To) 이 비어있습니다")
+
+        # 본문 빌드: subject 는 템플릿, body 는 인사말 + 표 + 마무리 + 서명
+        wr = db_module.get_weekly_report(conn, payload.week_iso)
+        rows = wr.get("rows") or []
+        if not rows:
+            raise HTTPException(400, "이 주의 보고서가 비어있습니다")
+
+        subject_tmpl = (
+            db_module.get_setting(conn, "email.subject_template")
+            or SETTING_DEFAULTS["email.subject_template"]
+        )
+        ctx = fmt_module._week_globals(payload.week_iso)
+        try:
+            subject = fmt_module.render_upnote_title(subject_tmpl, ctx)
+        except fmt_module.TemplateSyntaxError as exc:
+            raise HTTPException(400, f"제목 템플릿 오류: {exc.message}") from exc
+
+        greeting = db_module.get_setting(conn, "email.greeting") or ""
+        closing = db_module.get_setting(conn, "email.closing") or ""
+
+        html_body = weekly_module.render_email_html(
+            rows, greeting=greeting, closing=closing,
+            signature_html=signature_html,
+        )
+        plain_body = weekly_module.render_email_plain(
+            rows, greeting=greeting, closing=closing,
+        )
+
+        spec = smtp_module.EmailMessageSpec(
+            from_addr=from_addr,
+            to=to_list, cc=cc_list,
+            subject=subject,
+            html_body=html_body, plain_body=plain_body,
+        )
+        try:
+            smtp_module.send_email(cfg, spec)
+        except smtp_module.SmtpError as exc:
+            db_module.log_action(
+                conn, "email_send_weekly", payload.week_iso, "fail", str(exc),
+            )
+            raise HTTPException(500, str(exc)) from exc
+
+        db_module.log_action(
+            conn, "email_send_weekly", payload.week_iso, "ok",
+            f"to={','.join(to_list)} subject={subject}",
+        )
+        return {"ok": True, "subject": subject, "to": to_list, "cc": cc_list}
+
     # ─── Settings + Logs API ────────────────────────────
 
     SETTING_DEFAULTS: dict[str, str] = {
         "upnote.notebook_id": "",
         "upnote.markdown": "false",  # UpNote 본문을 markdown 으로 렌더할지
-        "upnote.wrap_in_code_block": "false",  # 본문을 ``` 코드블록으로 감싸 markdown 변환 차단
+        # 본문을 ``` 코드블록으로 감싸 markdown 자동 변환 차단
+        "upnote.wrap_in_code_block": "false",
         "upnote.title_template": DEFAULT_UPNOTE_TITLE,
         "upnote.body_template": DEFAULT_UPNOTE_BODY,
         "team_report.template": DEFAULT_TEAM_REPORT,
-        "misc.holiday_exclude_labels": "",  # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
+        # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
+        "misc.holiday_exclude_labels": "",
         "join.auto_task_name": "개발",  # 프로젝트 가입 시 자동으로 가입할 task name
         # 동기화 대상 활성 플래그 — false 면 메인 UI 의 해당 버튼이 숨겨짐
         "upnote.enabled": "true",
@@ -797,6 +1506,47 @@ def register_routes(app: FastAPI) -> None:
         "notion.projects_prop_name": "Name",
         "notion.projects_prop_worktype": "WorkType",
         "notion.projects_prop_code": "Code",  # 회사 시스템 프로젝트 코드 (remote_id)
+        # Notion Weekly Report — 주간업무보고 (구조화된 표) 별도 DB 동기화
+        "notion.weekly_report_enabled": "false",
+        "notion.weekly_report_db_id": "",
+        "notion.weekly_report_prop_title": "Week",
+        "notion.weekly_report_prop_date": "Date",
+        # 일일업무보고 페이지 상단의 "진행중인 일정" 영역 (월간/주간 계획 보관용)
+        "ongoing_schedule": "",
+        # 주간업무보고 페이지의 📤 UpNote 저장 — 일일 노트북과 분리된 노트북 ID
+        "upnote.weekly_notebook_id": "",
+        # 주간업무보고 UpNote 제목 (Jinja2). 일일과 다른 형식이 필요해 별도 키.
+        # ww_of_month = 월의 몇 번째 주, mm = 월요일 기준 월.
+        "upnote.weekly_title_template": (
+            "주간업무 보고[{{ yyyy }}.{{ mm }}.{{ ww_of_month }}주]"
+        ),
+        # 주간업무보고 휴가 행 표시명 (직급 포함 가능). 비면 client.user.name fallback.
+        "report.author_name": "",
+        # 주간업무보고 이메일 본문 — 표 위에 들어가는 인사말 (plain text, 여러 줄 가능)
+        "email.greeting": "",
+        # 주간업무보고 이메일 본문 — 표 아래 마무리 (plain text, 여러 줄)
+        "email.closing": "",
+        # 주간업무보고 이메일 받는사람 (콤마 구분, 여러 명 가능)
+        "email.to": "",
+        # 주간업무보고 이메일 참조 (콤마 구분)
+        "email.cc": "",
+        # 주간업무보고 이메일 제목 (Jinja2, upnote 제목과 동일 변수 — yy, ww 등)
+        "email.subject_template": "주간업무보고 ({{ yy }}년 {{ ww }}주차)",
+        # SMTP 발송 활성화 (true/false). 비활성이면 이메일 액션이 모두 차단.
+        "email.enabled": "false",
+        # SMTP 서버 주소 (예: smtp.office365.com, smtp.gmail.com)
+        "email.smtp_host": "",
+        # SMTP 포트 (587 = STARTTLS, 465 = SMTPS)
+        "email.smtp_port": "587",
+        # STARTTLS 사용 여부 (587 일 때 true, 465 일 때 false 권장)
+        "email.smtp_tls": "true",
+        # SMTP 인증 username (보통 보내는 메일 주소)
+        "email.username": "",
+        # 보내는사람 (From) — username 과 다를 수 있어 분리
+        "email.from": "",
+        # 이메일 서명 (HTML). SMTP 직접 발송이라 Outlook 의 자동 서명은 안 붙으므로
+        # 사용자가 직접 입력. HTML body 끝(마무리 다음)에 추가. 비면 미첨부.
+        "email.signature_html": "",
     }
 
     @app.get("/api/settings")
@@ -815,6 +1565,7 @@ def register_routes(app: FastAPI) -> None:
 
         template_keys = {
             "upnote.title_template",
+            "upnote.weekly_title_template",
             "upnote.body_template",
             "team_report.template",
         }
@@ -844,7 +1595,9 @@ def register_routes(app: FastAPI) -> None:
                 if payload.date:
                     ctx = fmt_module.build_team_report_context(conn, date=payload.date)
                 elif payload.week_iso:
-                    ctx = fmt_module.build_team_report_context(conn, week_iso=payload.week_iso)
+                    ctx = fmt_module.build_team_report_context(
+                        conn, week_iso=payload.week_iso,
+                    )
                 else:
                     raise HTTPException(400, "date or week_iso required")
                 text = fmt_module.render_team_report(payload.template, ctx)
@@ -970,8 +1723,8 @@ def register_routes(app: FastAPI) -> None:
 
     # ─── Notion 동기화 ────────────────────────────────
 
+    from .._common.auth import KeychainStore
     from . import notion as notion_module
-    from ..auth import KeychainStore
 
     NOTION_KEYCHAIN_SERVICE = "angeldash-notion"
 
@@ -1391,11 +2144,14 @@ def register_routes(app: FastAPI) -> None:
                               "project_name": None, "task_name": None})
                 continue
             project = conn.execute(
-                "SELECT name, remote_id FROM projects WHERE id = ?",
+                "SELECT name, remote_id, work_type FROM projects WHERE id = ?",
                 (m["project_id"],),
             ).fetchone()
             task_name = (
                 (project["remote_id"] or "").strip() if project else ""
+            )
+            task_work_type = (
+                (project["work_type"] or "").strip() if project else ""
             )
             if not task_name:
                 items.append({**e, "status": "missing_remote_id",
@@ -1405,8 +2161,10 @@ def register_routes(app: FastAPI) -> None:
                 continue
             items.append({**e, "status": "ready",
                           "project_name": m["project_name"],
-                          "task_name": task_name})
-            ready.append({**e, "task_name": task_name})
+                          "task_name": task_name,
+                          "task_work_type": task_work_type})
+            ready.append({**e, "task_name": task_name,
+                          "task_work_type": task_work_type})
 
         if payload.dry_run:
             return {"items": items, "missing": missing_categories}
@@ -1418,9 +2176,13 @@ def register_routes(app: FastAPI) -> None:
         if not ready:
             return {"items": items, "results": [], "missing": []}
 
-        # 필요한 월별 list_jobtime_tasks 호출 → name → task_id 맵
+        # list_jobtime_tasks → (name, work_type) → task_id 맵.
+        # 같은 name 의 task 가 work_type 만 다르게 여러 개 등록될 수 있어
+        # 두 컬럼 모두를 key 로 한다. project.work_type 이 빈 (기존 데이터)
+        # 경우 호환을 위해 name-only fallback 도 같이 둔다.
         months = sorted({e["date"][:7] for e in ready})
-        task_id_by_month: dict[str, dict[str, str]] = {}
+        task_id_by_month: dict[str, dict[tuple[str, str], str]] = {}
+        task_id_fallback_by_month: dict[str, dict[str, str]] = {}
         for ym in months:
             try:
                 tasks = await client.list_jobtime_tasks(year_month=ym)
@@ -1430,16 +2192,39 @@ def register_routes(app: FastAPI) -> None:
                     f"list_jobtime_tasks({ym}): {exc}",
                 )
                 raise HTTPException(500, f"task 목록 조회 실패: {exc}") from exc
-            task_id_by_month[ym] = {t["name"]: t["task_id"] for t in tasks}
+            paired: dict[tuple[str, str], str] = {}
+            fallback: dict[str, str] = {}
+            fallback_wt: dict[str, str] = {}  # bookkeeping
+            for t in tasks:
+                name = t["name"]
+                wt = (t.get("work_type") or "").strip()
+                paired[(name, wt)] = t["task_id"]
+                # name 만으로 매칭하는 fallback — work_type 비어있는 task 를
+                # 우선 채택 (legacy 매핑 의미와 가장 일치). 그것도 없으면
+                # 회사 응답에서 first-seen 유지. 결정적 동작.
+                if name not in fallback:
+                    fallback[name] = t["task_id"]
+                    fallback_wt[name] = wt
+                elif not wt and fallback_wt.get(name):
+                    fallback[name] = t["task_id"]
+                    fallback_wt[name] = wt
+            task_id_by_month[ym] = paired
+            task_id_fallback_by_month[ym] = fallback
 
         # save 페이로드 빌드 (task 미등록 항목은 분류)
         save_rows: list[dict] = []
         unregistered: list[str] = []
         for e in ready:
             ym = e["date"][:7]
-            tid = task_id_by_month.get(ym, {}).get(e["task_name"])
+            wt = (e.get("task_work_type") or "").strip()
+            paired = task_id_by_month.get(ym, {})
+            tid = paired.get((e["task_name"], wt))
+            if not tid and not wt:
+                # project 에 work_type 미지정 (기존 등록) — name-only fallback
+                tid = task_id_fallback_by_month.get(ym, {}).get(e["task_name"])
             if not tid:
-                unregistered.append(e["task_name"])
+                label = f"{e['task_name']} [{wt}]" if wt else e["task_name"]
+                unregistered.append(label)
                 continue
             save_rows.append({
                 "task_id": tid,
@@ -1501,12 +2286,23 @@ def register_routes(app: FastAPI) -> None:
         except Exception as exc:
             raise HTTPException(500, f"task 목록 조회 실패: {exc}") from exc
 
-        by_name = {t["name"]: t["task_id"] for t in tasks}
-        task_id = by_name.get(payload.task_name)
+        # (name, work_type) 우선 매칭, work_type 비면 name-only fallback (호환)
+        wt = (payload.task_work_type or "").strip()
+        paired: dict[tuple[str, str], str] = {
+            (t["name"], (t.get("work_type") or "").strip()): t["task_id"]
+            for t in tasks
+        }
+        fallback: dict[str, str] = {t["name"]: t["task_id"] for t in tasks}
+        task_id = paired.get((payload.task_name, wt))
+        if not task_id and not wt:
+            task_id = fallback.get(payload.task_name)
         if not task_id:
+            label = (
+                f"{payload.task_name} [{wt}]" if wt else payload.task_name
+            )
             raise HTTPException(
                 400,
-                f"task '{payload.task_name}' 가 회사 시스템에 등록되어 있지 않습니다.",
+                f"task '{label}' 가 회사 시스템에 등록되어 있지 않습니다.",
             )
 
         rows = [{
@@ -1525,8 +2321,11 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(500, str(exc)) from exc
 
         action_label = "delete" if payload.hours == 0 else "push"
+        log_label = (
+            f"{payload.task_name} [{wt}]" if wt else payload.task_name
+        )
         db_module.log_action(
             conn, "timesheet", payload.date, "ok",
-            f"{action_label} {payload.task_name} = {payload.hours}h",
+            f"{action_label} {log_label} = {payload.hours}h",
         )
         return {"ok": True}

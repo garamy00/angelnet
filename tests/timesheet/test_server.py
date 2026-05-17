@@ -44,7 +44,8 @@ def test_vacation_page_has_external_new_vacation_button(api):
 def test_vacation_annual_route(api, mock_client):
     """/api/vacation/annual 이 client.get_annual_vacation_summary 결과 전달."""
     mock_client.get_annual_vacation_summary = AsyncMock(return_value={
-        "total": 23.0, "used": 9.0, "remaining": 14.0, "raw_text": "23.0 - 9.0 = 14.0 일",
+        "total": 23.0, "used": 9.0, "remaining": 14.0,
+        "raw_text": "23.0 - 9.0 = 14.0 일",
     })
     r = api.get("/api/vacation/annual?year=2026")
     assert r.status_code == 200
@@ -139,6 +140,69 @@ def test_put_week_note_persists(api):
     assert g.json()["body_md"] == "메모 본문"
 
 
+def test_weeks_index_returns_weeks_with_entries(api):
+    """/api/weeks/index — entries 가 있는 주차를 최신순으로 반환."""
+    # W18 / W19 / W20 에 entries 작성
+    api.put("/api/days/2026-04-27", json={
+        "week_iso": "2026-W18",
+        "entries": [{"category": "X", "hours": 1, "body_md": ""}],
+    })
+    api.put("/api/days/2026-05-04", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "Y", "hours": 1, "body_md": ""}],
+    })
+    api.put("/api/days/2026-05-11", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "Z", "hours": 1, "body_md": ""}],
+    })
+
+    r = api.get("/api/weeks/index")
+    assert r.status_code == 200
+    items = r.json()
+    weeks = [it["week_iso"] for it in items]
+    # 최신순
+    assert weeks == ["2026-W20", "2026-W19", "2026-W18"]
+
+
+def test_weeks_index_also_includes_weeks_with_only_notes(api):
+    """entries 없이 week_notes 만 있는 주차도 포함."""
+    api.put("/api/weeks/2026-W22/note", json={"body_md": "주간 메모"})
+
+    r = api.get("/api/weeks/index")
+    weeks = [it["week_iso"] for it in r.json()]
+    assert "2026-W22" in weeks
+
+
+def test_weeks_index_excludes_empty_weeks(api):
+    """entries 없고 note 도 비어있는 주차는 list 에 포함 X."""
+    api.put("/api/weeks/2026-W21/note", json={"body_md": ""})
+
+    r = api.get("/api/weeks/index")
+    weeks = [it["week_iso"] for it in r.json()]
+    assert "2026-W21" not in weeks
+
+
+def test_weekly_reports_list_returns_saved_weeks(api):
+    """/api/weekly-reports (list) — weekly_reports 테이블의 row 를 최신순으로."""
+    api.put("/api/weekly-reports/2026-W20", json={"rows": [
+        {"project_name": "P", "last_week": "", "this_week": "x",
+         "next_week": "", "note": ""},
+    ]})
+    api.put("/api/weekly-reports/2026-W19", json={"rows": [
+        {"project_name": "Q", "last_week": "", "this_week": "y",
+         "next_week": "", "note": ""},
+    ]})
+
+    r = api.get("/api/weekly-reports")
+    assert r.status_code == 200
+    items = r.json()
+    weeks = [it["week_iso"] for it in items]
+    assert weeks == ["2026-W20", "2026-W19"]
+    # updated_at 도 동봉
+    for it in items:
+        assert it.get("updated_at")
+
+
 def test_create_and_list_projects(api):
     r = api.post(
         "/api/projects",
@@ -190,7 +254,7 @@ def test_delete_project_blocked_by_pattern_mapping(api):
 
 
 def test_delete_mapping_removes_row(api):
-    """매핑 행 삭제 후 다시 list 했을 때 그 카테고리가 없거나 placeholder 로만 나타남."""
+    """매핑 행 삭제 후 list 했을 때 그 카테고리가 없거나 placeholder 로만 나타남."""
     p = api.post("/api/projects", json={"name": "Q"}).json()
     api.put("/api/mappings/cat-x", json={"project_id": p["id"], "excluded": False})
     r = api.delete("/api/mappings/cat-x")
@@ -257,6 +321,8 @@ def test_get_settings_returns_defaults_for_unset(api):
         "upnote.title_template",
         "upnote.body_template",
         "team_report.template",
+        "ongoing_schedule",
+        "upnote.weekly_notebook_id",
     ):
         assert key in body
 
@@ -267,12 +333,37 @@ def test_put_settings_updates_values(api):
     assert r.json()["upnote.notebook_id"] == "abc-123"
 
 
+def test_put_settings_ongoing_schedule_round_trip(api):
+    """ongoing_schedule key 가 PUT → DB → GET round-trip 으로 보존되는지."""
+    payload = "<< 5월 월간 계획 >>\n*) EM 고도화 (05/06 ~ 05/29)"
+    api.put("/api/settings", json={"ongoing_schedule": payload})
+    r = api.get("/api/settings")
+    assert r.json()["ongoing_schedule"] == payload
+
+
+def test_put_settings_weekly_notebook_id_round_trip(api):
+    """upnote.weekly_notebook_id key 가 PUT → GET 으로 보존되는지."""
+    api.put("/api/settings", json={"upnote.weekly_notebook_id": "주간업무보고-노트북"})
+    r = api.get("/api/settings")
+    assert r.json()["upnote.weekly_notebook_id"] == "주간업무보고-노트북"
+
+
 def test_put_settings_rejects_invalid_jinja2(api):
     r = api.put(
         "/api/settings",
         json={"team_report.template": "{% bogus %}"},
     )
     assert r.status_code == 400
+
+
+def test_put_settings_validates_weekly_title_template_syntax(api):
+    """주간 제목 템플릿도 다른 template 키와 동일하게 syntax 검증."""
+    r = api.put(
+        "/api/settings",
+        json={"upnote.weekly_title_template": "{% unclosed"},
+    )
+    assert r.status_code == 400
+    assert "template" in r.json().get("detail", "").lower()
 
 
 def test_post_settings_preview_renders_team_report(api):
@@ -484,6 +575,89 @@ def test_timesheet_actual_submit_calls_search_then_save(api, mock_client):
     }]
 
 
+def test_timesheet_submit_matches_by_work_type(api, mock_client):
+    """같은 task name 의 두 work_type 중 project.work_type 으로 정확히 매칭."""
+    mock_client.user_id = "alice"
+    # 회사 시스템: 같은 이름 두 task — work_type 만 다름
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "30001", "name": "행정, 공통개발업무",
+         "work_type": "개발"},
+        {"task_id": "30002", "name": "행정, 공통개발업무",
+         "work_type": "세미나"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "AI 세미나", "hours": 2, "body_md": ""}],
+    })
+    # 프로젝트 등록 — work_type='세미나' 명시
+    pid = api.post("/api/projects", json={
+        "name": "행정, 공통개발업무",
+        "remote_id": "행정, 공통개발업무",
+        "work_type": "세미나",
+    }).json()["id"]
+    api.put("/api/mappings/AI 세미나",
+            json={"project_id": pid, "excluded": False})
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    # [세미나] 의 task_id 인 30002 가 선택되어야 함 (30001 [개발] 이 아님)
+    assert rows[0]["task_id"] == "30002"
+
+
+def test_timesheet_submit_falls_back_to_name_only_for_legacy_projects(
+    api, mock_client,
+):
+    """project.work_type 이 비어있는 기존 등록 데이터 — name 만으로 매칭."""
+    mock_client.user_id = "alice"
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "40001", "name": "단순 task", "work_type": "개발"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+    # work_type 미지정 (기존 데이터 시뮬레이션)
+    pid = api.post("/api/projects", json={
+        "name": "단순 task", "remote_id": "단순 task",
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    assert rows[0]["task_id"] == "40001"
+
+
+def test_push_one_matches_by_work_type(api, mock_client):
+    """push-one 도 task_work_type 으로 정확 매칭."""
+    mock_client.user_id = "alice"
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "50001", "name": "행정", "work_type": "개발"},
+        {"task_id": "50002", "name": "행정", "work_type": "세미나"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    r = api.post("/api/actions/timesheet-push-one", json={
+        "date": "2026-05-12", "task_name": "행정",
+        "task_work_type": "세미나", "hours": 3,
+    })
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    assert rows[0]["task_id"] == "50002"
+
+
 def test_timesheet_blocks_when_mapping_missing(api):
     """매핑 누락 항목이 있으면 실제 호출은 400."""
     api.put("/api/days/2026-05-12", json={
@@ -629,7 +803,7 @@ def test_create_project_rejects_same_name_same_work_type(api):
 
 
 def test_remote_tasks_backfills_legacy_empty_work_type(api, mock_client):
-    """work_type 이 비어 있는 레거시 행은 처음 매칭되는 remote task 의 work_type 으로 backfill."""
+    """work_type 비어있는 레거시 행은 첫 매칭 remote task 의 work_type 으로 backfill."""
     mock_client.list_jobtime_tasks = AsyncMock(return_value=[
         {"task_id": "11113", "name": "행정", "work_type": "개발"},
         {"task_id": "11114", "name": "행정", "work_type": "세미나"},
@@ -649,6 +823,40 @@ def test_remote_tasks_backfills_legacy_empty_work_type(api, mock_client):
     legacy = [p for p in items if p["name"] == "행정"]
     assert len(legacy) == 1
     assert legacy[0]["work_type"] == "개발"
+
+
+def test_put_mapping_with_weekly_project_name(api):
+    """PUT /api/mappings/{category} 가 weekly_project_name 을 받아 GET 응답에 반환."""
+    # 프로젝트 1개 등록
+    r = api.post("/api/projects", json={"name": "X 프로젝트", "active": True})
+    assert r.status_code == 200
+    project_id = r.json()["id"]
+    # mapping PUT
+    r = api.put(
+        "/api/mappings/EM 고도화",
+        json={
+            "project_id": project_id,
+            "excluded": False,
+            "weekly_project_name": "OAM",
+        },
+    )
+    assert r.status_code == 200
+    # GET 응답 검증
+    items = {m["category"]: m for m in api.get("/api/mappings").json()}
+    assert items["EM 고도화"]["weekly_project_name"] == "OAM"
+
+    # 빈 문자열 → None 정규화 round-trip
+    r = api.put(
+        "/api/mappings/EM 고도화",
+        json={
+            "project_id": project_id,
+            "excluded": False,
+            "weekly_project_name": "   ",
+        },
+    )
+    assert r.status_code == 200
+    items = {m["category"]: m for m in api.get("/api/mappings").json()}
+    assert items["EM 고도화"]["weekly_project_name"] is None
 
 
 def test_remote_tasks_default_year_month(api, mock_client):
@@ -743,9 +951,10 @@ def test_verify_marks_synced_and_mismatch(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: 5/12 EM 고도화 = 4h, 5/13 = 0h
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화 task": {12: 4.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "EM 고도화 task", "label": "EM 고도화 task",
+         "work_type": "", "days": {12: 4.0}},
+    ])
 
     pid = api.post("/api/projects", json={
         "name": "EM 고도화", "remote_id": "EM 고도화 task",
@@ -772,7 +981,7 @@ def test_verify_marks_synced_and_mismatch(api, mock_client):
 
 def test_verify_marks_no_mapping(api, mock_client):
     from unittest.mock import AsyncMock
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={})
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
     api.put("/api/days/2026-05-12", json={
         "week_iso": "2026-W20",
         "entries": [{"category": "Unmapped", "hours": 4, "body_md": ""}],
@@ -825,9 +1034,10 @@ def test_verify_aggregates_same_task_on_same_day(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: EM 고도화 task 의 5/7 = 8h
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화 task": {7: 8.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "EM 고도화 task", "label": "EM 고도화 task",
+         "work_type": "", "days": {7: 8.0}},
+    ])
 
     # 두 카테고리 모두 같은 task 로 매핑
     pid = api.post("/api/projects", json={
@@ -877,9 +1087,10 @@ def test_verify_uses_pattern_mapping_when_body_matches(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: 패턴_프로젝트_task 의 5/7 = 4h
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "패턴_프로젝트_task": {7: 4.0},
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "패턴_프로젝트_task", "label": "패턴_프로젝트_task",
+         "work_type": "", "days": {7: 4.0}},
+    ])
 
     # 카테고리 매핑은 다른 task. 패턴 매핑이 우선이어야 함.
     cat_pid = api.post("/api/projects", json={
@@ -920,11 +1131,17 @@ def test_verify_reports_orphan_entries(api, mock_client):
     from unittest.mock import AsyncMock
     mock_client.user_id = "alice"
     # 회사 시스템: 5/12 에 두 task 시간이 있음
-    mock_client.fetch_jobtime_grid = AsyncMock(return_value={
-        "EM 고도화 task": {12: 4.0},     # 도구에도 있음
-        "다른 잡일 task": {12: 2.0},      # 도구에 없음 (orphan)
-        "또 다른 task": {15: 1.0},        # 그 주 아니면 무시 (W20=5/11~5/17 이므로 포함)
-    })
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        # 도구에도 있음
+        {"task_name": "EM 고도화 task", "label": "EM 고도화 task",
+         "work_type": "", "days": {12: 4.0}},
+        # 도구에 없음 (orphan)
+        {"task_name": "다른 잡일 task", "label": "다른 잡일 task",
+         "work_type": "", "days": {12: 2.0}},
+        # 그 주 안 (W20=5/11~5/17 포함)
+        {"task_name": "또 다른 task", "label": "또 다른 task",
+         "work_type": "", "days": {15: 1.0}},
+    ])
 
     pid = api.post("/api/projects", json={
         "name": "EM 고도화", "remote_id": "EM 고도화 task",
@@ -945,6 +1162,155 @@ def test_verify_reports_orphan_entries(api, mock_client):
     # 다른 잡일 task 와 또 다른 task 둘 다 orphan
     assert ("2026-05-12", "다른 잡일 task") in orphan_keys
     assert ("2026-05-15", "또 다른 task") in orphan_keys
+
+
+def test_verify_distinguishes_tasks_by_work_type(api, mock_client):
+    """같은 name 의 두 task (work_type 만 다름) — verify 가 정확히 분리 비교.
+
+    회사 시스템: 행정 [개발] = 2h, 행정 [세미나] = 0
+    로컬: AI 세미나 → 행정 [세미나] 매핑, 2h
+    → 로컬 [세미나] 는 not_submitted, 회사 [개발] 의 2h 는 orphan 으로.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "행정", "label": "행정 [개발]",
+         "work_type": "개발", "days": {15: 2.0}},
+        {"task_name": "행정", "label": "행정 [세미나]",
+         "work_type": "세미나", "days": {}},
+    ])
+
+    # 로컬: AI 세미나 → 행정 [세미나]
+    pid = api.post("/api/projects", json={
+        "name": "행정", "remote_id": "행정",
+        "work_type": "세미나",
+    }).json()["id"]
+    api.put("/api/mappings/AI 세미나",
+            json={"project_id": pid, "excluded": False})
+    api.put("/api/days/2026-05-15", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "AI 세미나", "hours": 2, "body_md": ""}],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = r.json()["items"]
+    by_status: dict[str, list[dict]] = {}
+    for it in items:
+        by_status.setdefault(it["sync_status"], []).append(it)
+
+    # 로컬 [세미나] entry — 아직 회사에 제출 안 됨
+    sub = [it for it in items
+           if it.get("category") == "AI 세미나"
+           and it["sync_status"] == "not_submitted"]
+    assert sub, "[세미나] 항목이 not_submitted 로 표시되어야 함"
+
+    # 회사 [개발] 의 2h — 로컬 매핑이 [세미나] 라 [개발] 은 orphan
+    orphans = by_status.get("orphan", [])
+    assert any(
+        it["task_name"] == "행정"
+        and it.get("task_work_type") == "개발"
+        and it["remote_hours"] == 2.0
+        for it in orphans
+    ), "회사 [개발] 의 2h 가 orphan 으로 표시되어야 함"
+
+
+def test_verify_legacy_project_without_work_type_falls_back_to_name(
+    api, mock_client,
+):
+    """project.work_type 비어있는 기존 데이터 — name 만 매칭하는 fallback 동작."""
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "단순 task", "label": "단순 task [개발]",
+         "work_type": "개발", "days": {12: 4.0}},
+    ])
+
+    # 기존 데이터 — work_type 미지정
+    pid = api.post("/api/projects", json={
+        "name": "단순", "remote_id": "단순 task",
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = [
+        it for it in r.json()["items"]
+        if it.get("category") == "X"
+    ]
+    assert items and items[0]["sync_status"] == "synced"  # fallback 매칭
+
+
+def test_submit_fallback_prefers_empty_work_type(api, mock_client):
+    """fallback 매칭 — 같은 name 의 task 가 여러 개일 때 work_type 빈 것을 우선 채택.
+
+    legacy project (work_type='') 의 의미와 가장 자연스럽게 일치.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    # 회사 시스템: 같은 name 두 task — 응답 순서 [개발], [] (빈 wt)
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "DEV-ID", "name": "동일 task", "work_type": "개발"},
+        {"task_id": "EMPTY-ID", "name": "동일 task", "work_type": ""},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    # legacy project — work_type 미지정
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+    pid = api.post("/api/projects", json={
+        "name": "동일", "remote_id": "동일 task",  # work_type 미지정
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    # 빈 work_type 의 task (EMPTY-ID) 가 우선 채택되어야 함, [개발] (DEV-ID) 아님
+    assert rows[0]["task_id"] == "EMPTY-ID"
+
+
+def test_verify_legacy_local_does_not_trigger_false_orphan(api, mock_client):
+    """project.work_type='' (legacy 매핑) 일 때 회사의 같은 name + wt 명시 task 가
+    orphan 으로 잘못 분류되지 않는다 — _remote_hours 의 name-only fallback 과
+    orphan 검사의 비대칭 회귀 방지."""
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "단순", "label": "단순 [개발]",
+         "work_type": "개발", "days": {12: 4.0}},
+    ])
+
+    # legacy project — work_type 미지정
+    pid = api.post("/api/projects", json={
+        "name": "단순", "remote_id": "단순",
+    }).json()["id"]
+    api.put("/api/mappings/X",
+            json={"project_id": pid, "excluded": False})
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "X", "hours": 4, "body_md": ""}],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = r.json()["items"]
+    # 동일 (date, name) 의 orphan 이 없어야 함
+    orphans = [
+        it for it in items
+        if it["sync_status"] == "orphan"
+        and it.get("task_name") == "단순"
+        and it["date"] == "2026-05-12"
+    ]
+    assert not orphans, f"legacy fallback 에서 거짓 orphan 발생: {orphans}"
 
 
 def test_push_one_submits_single_row(api, mock_client):
@@ -1182,3 +1548,261 @@ def test_misc_auto_route_uses_exclude_labels(api, mock_client):
     assert r.status_code == 200
     # 5/22 가 영업일 → 연차 → "내일 연차"
     assert r.json()["text"] == "내일 연차입니다"
+
+
+# ─── 주간업무보고 API 회귀 ─────────────────────────────
+
+
+def test_get_weekly_report_returns_empty_for_unset(api):
+    r = api.get("/api/weekly-reports/2026-W20")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["week_iso"] == "2026-W20"
+    assert body["rows"] == []
+
+
+def test_put_weekly_report_round_trip(api):
+    rows = [
+        {"project_name": "OAM", "last_week": "a", "this_week": "b",
+         "next_week": "c", "note": "d"},
+    ]
+    r = api.put("/api/weekly-reports/2026-W20", json={"rows": rows})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+    r2 = api.get("/api/weekly-reports/2026-W20")
+    assert r2.json()["rows"] == rows
+
+
+def test_generate_weekly_report_preserves_manual(api):
+    # 수동 입력
+    rows = [
+        {"project_name": "OAM", "last_week": "", "this_week": "",
+         "next_week": "차주 작업", "note": "비고"},
+    ]
+    api.put("/api/weekly-reports/2026-W20", json={"rows": rows})
+    # generate 호출 — daily entries 가 없어도 200 응답이어야 함
+    r = api.post(
+        "/api/weekly-reports/2026-W20/generate",
+        json={"preserve_manual": True},
+    )
+    assert r.status_code == 200
+    assert "rows" in r.json()
+
+
+def test_weekly_report_upnote_requires_notebook_id(api):
+    api.put("/api/weekly-reports/2026-W20", json={"rows": [
+        {"project_name": "X", "last_week": "a", "this_week": "b",
+         "next_week": "", "note": ""},
+    ]})
+    r = api.post(
+        "/api/actions/weekly-report-upnote",
+        json={"week_iso": "2026-W20"},
+    )
+    assert r.status_code == 400
+    assert "weekly_notebook_id" in r.json()["detail"]
+
+
+def test_weekly_report_upnote_requires_non_empty_rows(api):
+    api.put("/api/settings", json={"upnote.weekly_notebook_id": "test-nb"})
+    r = api.post(
+        "/api/actions/weekly-report-upnote",
+        json={"week_iso": "2026-W20"},
+    )
+    assert r.status_code == 400
+    assert "비어" in r.json()["detail"]
+
+
+def test_monthly_grid_returns_tasks_and_totals(api, mock_client):
+    """월간 매트릭스 — task × day 그리드와 합계를 정확히 집계."""
+    from unittest.mock import AsyncMock
+
+    # 회사 시스템: 두 task 가 5월에 입력 (work_type 분리 보존)
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "EM 고도화", "label": "EM 고도화 [개발]",
+         "work_type": "개발", "days": {1: 8.0, 2: 4.0, 15: 8.0}},
+        {"task_name": "SMSC 리빌딩", "label": "SMSC 리빌딩 [개발]",
+         "work_type": "개발", "days": {2: 4.0, 16: 8.0}},
+    ])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["year_month"] == "2026-05"
+    assert body["days_in_month"] == 31
+
+    # task 순서는 라벨순 (work_type 포함)
+    task_names = [t["task_name"] for t in body["tasks"]]
+    assert task_names == sorted(task_names)
+    # 라벨 포맷: 'task [work_type]'
+    assert "EM 고도화 [개발]" in task_names
+    assert "SMSC 리빌딩 [개발]" in task_names
+
+    # task 별 합계
+    by_name = {t["task_name"]: t for t in body["tasks"]}
+    assert by_name["EM 고도화 [개발]"]["total"] == 20.0
+    assert by_name["SMSC 리빌딩 [개발]"]["total"] == 12.0
+
+    # 일별 합계 — 2일에 두 task 합쳐서 8
+    # JSON keys 는 문자열로 들어옴
+    daily = body["daily_totals"]
+    assert daily["1"] == 8.0
+    assert daily["2"] == 8.0
+    assert daily["15"] == 8.0
+    assert daily["16"] == 8.0
+
+    # 월 합계
+    assert body["month_total"] == 32.0
+
+
+def test_monthly_grid_invalid_year_month_returns_400(api):
+    r = api.get("/api/timesheet/monthly-grid?year_month=bad-format")
+    assert r.status_code == 400
+    assert "year_month" in r.json()["detail"]
+
+
+def test_monthly_grid_empty_grid(api, mock_client):
+    """task 가 없는 달도 정상 응답 (tasks=[], totals=0)."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-04")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tasks"] == []
+    assert body["daily_totals"] == {}
+    assert body["month_total"] == 0.0
+    assert body["days_in_month"] == 30
+
+
+def test_monthly_grid_filters_zero_total_tasks(api, mock_client):
+    """합계 0 인 task 는 응답에 포함되지 않음."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "활성 task", "label": "활성 task [개발]",
+         "work_type": "개발", "days": {1: 4.0, 2: 4.0}},
+        {"task_name": "0인 task", "label": "0인 task [개발]",
+         "work_type": "개발", "days": {}},
+        {"task_name": "다른 0인 task", "label": "다른 0인 task [개발]",
+         "work_type": "개발", "days": {1: 0.0}},
+    ])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    assert r.status_code == 200
+    names = [t["task_name"] for t in r.json()["tasks"]]
+    assert names == ["활성 task [개발]"]
+
+
+def test_monthly_grid_separates_same_task_by_work_type(api, mock_client):
+    """같은 task_name 이라도 work_type 이 다르면 별도 row."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "OAM 개선", "label": "OAM 개선 [개발]",
+         "work_type": "개발", "days": {1: 8.0, 2: 8.0}},
+        {"task_name": "OAM 개선", "label": "OAM 개선 [세미나]",
+         "work_type": "세미나", "days": {3: 2.0}},
+    ])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    body = r.json()
+    names = [t["task_name"] for t in body["tasks"]]
+    assert "OAM 개선 [개발]" in names
+    assert "OAM 개선 [세미나]" in names
+    by_name = {t["task_name"]: t for t in body["tasks"]}
+    assert by_name["OAM 개선 [개발]"]["total"] == 16.0
+    assert by_name["OAM 개선 [세미나]"]["total"] == 2.0
+
+
+def test_monthly_grid_omits_brackets_when_work_type_empty(api, mock_client):
+    """label 자체에 brackets 없으면 그대로 표시 (work_type 비었을 때)."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "단일 task", "label": "단일 task",
+         "work_type": "", "days": {1: 4.0}},
+    ])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    names = [t["task_name"] for t in r.json()["tasks"]]
+    assert names == ["단일 task"]
+
+
+def test_monthly_grid_adds_vacation_rows_with_full_and_half(api, mock_client):
+    """연차/공가/경조사/휴직 → 8h, 반차 → 4h 자동 적용. type 별 row 그룹화."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[
+        # 회사 system 의 hours 값과 무관하게 type 기준으로 4/8 자동 결정
+        {"date": "2026-05-04", "type": "연차", "hours": 8.0},
+        {"date": "2026-05-13", "type": "반차(오후)", "hours": 4.0},
+        {"date": "2026-05-15", "type": "연차", "hours": 8.0},
+    ])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    body = r.json()
+    by_label = {v["label"]: v for v in body["vacations"]}
+    assert "연차" in by_label
+    assert "오후 반차" in by_label
+    # 연차 — 두 날짜 모두 8h
+    assert by_label["연차"]["days"]["4"] == 8.0
+    assert by_label["연차"]["days"]["15"] == 8.0
+    assert by_label["연차"]["total"] == 16.0
+    # 오후 반차 — 한 날짜, 4h
+    assert by_label["오후 반차"]["days"]["13"] == 4.0
+    assert by_label["오후 반차"]["total"] == 4.0
+    # 일별/월 합계에도 휴가 hours 포함
+    assert body["daily_totals"]["4"] == 8.0
+    assert body["daily_totals"]["13"] == 4.0
+    assert body["month_total"] == 20.0
+
+
+def test_monthly_grid_daily_totals_sum_task_and_vacation(api, mock_client):
+    """같은 날에 task 시간 + 휴가 시간 둘 다 있을 때 daily_totals 가 정확히 합산.
+
+    예: 오전 반차 (4h) + 오후 task 입력 (4h) = 그 날 합계 8h.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "OAM", "label": "OAM [개발]",
+         "work_type": "개발", "days": {15: 4.0}},  # 5/15 오후 입력
+    ])
+    mock_client.list_holidays = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[
+        {"date": "2026-05-15", "type": "반차(오전)", "hours": 4.0},
+    ])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    body = r.json()
+    # 일별 합계: 5/15 에 task 4h + 휴가 4h = 8h
+    assert body["daily_totals"]["15"] == 8.0
+    # 월 합계도 합산
+    assert body["month_total"] == 8.0
+
+
+def test_monthly_grid_holidays_exclude_labels(api, mock_client):
+    """misc.holiday_exclude_labels 에 들어있는 label 은 휴일 list 에서 제외."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[
+        {"date": "2026-05-01", "label": "노동절", "types": ["public"]},
+        {"date": "2026-05-05", "label": "어린이날", "types": ["public"]},
+        {"date": "2026-05-15", "label": "가정의날", "types": ["company"]},
+    ])
+    # '가정의날' 은 출근일로 취급하도록 설정
+    api.put("/api/settings", json={
+        "misc.holiday_exclude_labels": "가정의날, 회사창립일",
+    })
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    holidays = r.json()["holidays"]
+    days = {h["day"] for h in holidays}
+    assert 1 in days   # 노동절
+    assert 5 in days   # 어린이날
+    assert 15 not in days  # 가정의날 — 제외됨

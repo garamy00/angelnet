@@ -168,6 +168,53 @@ def code_block(text: str) -> dict[str, Any]:
     }
 
 
+def _cell_rich_text(value: str) -> list[dict[str, Any]]:
+    """table_row 셀용 rich_text 배열. 빈값이면 빈 배열, 길면 청크 분할."""
+    if not value:
+        return []
+    return [
+        {"type": "text", "text": {"content": value[i : i + TEXT_CHUNK_MAX]}}
+        for i in range(0, len(value), TEXT_CHUNK_MAX)
+    ]
+
+
+def table_block(
+    headers: list[str], rows: list[list[str]],
+) -> dict[str, Any]:
+    """네이티브 Notion 표 블록.
+
+    Args:
+        headers: 첫 행 컬럼 헤더 (개수 == 모든 row 의 셀 개수).
+        rows: 데이터 행. 각 row 는 컬럼 수만큼의 셀 문자열.
+
+    셀 안의 `\\n` 은 Notion 이 줄바꿈으로 렌더. HTML 특수문자(`<br>` 등)는
+    렌더되지 않으므로 호출 측에서 plain text 로 정제해 전달해야 한다.
+    """
+    width = len(headers)
+
+    def _row(cells: list[str]) -> dict[str, Any]:
+        # 셀 개수를 컬럼 width 에 맞춰 padding / truncate
+        normalized = list(cells[:width]) + [""] * max(0, width - len(cells))
+        return {
+            "type": "table_row",
+            "table_row": {
+                "cells": [_cell_rich_text(c or "") for c in normalized],
+            },
+        }
+
+    children = [_row(headers)] + [_row(r) for r in rows]
+    return {
+        "object": "block",
+        "type": "table",
+        "table": {
+            "table_width": width,
+            "has_column_header": True,
+            "has_row_header": False,
+            "children": children,
+        },
+    }
+
+
 def _split_rich_text(text: str) -> list[dict[str, Any]]:
     """2000자 제한 회피: 여러 rich_text 청크로 분할."""
     if not text:

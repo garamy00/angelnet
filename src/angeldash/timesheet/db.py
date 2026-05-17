@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import datetime
+import json
 import logging
 import os
 import sqlite3
@@ -65,7 +67,8 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS mappings (
     category TEXT PRIMARY KEY,
     project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    excluded INTEGER NOT NULL DEFAULT 0
+    excluded INTEGER NOT NULL DEFAULT 0,
+    weekly_project_name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS week_notes (
@@ -102,6 +105,12 @@ CREATE TABLE IF NOT EXISTS daily_meta (
     source_commit TEXT NOT NULL DEFAULT 'done',
     misc_note TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS weekly_reports (
+    week_iso TEXT PRIMARY KEY,
+    rows_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -121,6 +130,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     _migrate_projects_add_work_type(conn)
     _migrate_projects_add_project_code(conn)
+    _migrate_mappings_add_weekly_project_name(conn)
     conn.commit()
 
 
@@ -139,8 +149,8 @@ def _migrate_projects_add_work_type(conn: sqlite3.Connection) -> None:
     """기존 projects 테이블에 work_type 컬럼이 없으면 추가하고 UNIQUE 재구성.
 
     SQLite 는 ALTER TABLE 로 UNIQUE 제약 변경 불가 → 테이블 rebuild.
-    rebuild 시 외래키(mappings.project_id, pattern_mappings.project_id) 도 그대로 유지된다
-    — id 가 보존되기 때문.
+    rebuild 시 외래키(mappings.project_id, pattern_mappings.project_id) 도
+    그대로 유지된다 — id 가 보존되기 때문.
     """
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(projects)")}
     if "work_type" in cols:
@@ -163,6 +173,20 @@ def _migrate_projects_add_work_type(conn: sqlite3.Connection) -> None:
     """)
     conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Migrated projects table: added work_type column")
+
+
+def _migrate_mappings_add_weekly_project_name(conn: sqlite3.Connection) -> None:
+    """기존 mappings 테이블에 weekly_project_name 컬럼이 없으면 ALTER TABLE 로 추가.
+
+    멱등 (PRAGMA 로 컬럼 존재 여부 확인 후 추가). 신규 사용자는 CREATE TABLE 에
+    이미 포함이라 no-op.
+    """
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(mappings)")}
+    if "weekly_project_name" in cols:
+        return
+    conn.execute("ALTER TABLE mappings ADD COLUMN weekly_project_name TEXT")
+    logger.info("Migrated mappings table: added weekly_project_name column")
+    conn.commit()
 
 
 # ─── days / entries ────────────────────────────────────
@@ -307,7 +331,7 @@ def count_project_mapping_usage(
 
 
 def delete_project(conn: sqlite3.Connection, project_id: int) -> bool:
-    """프로젝트 삭제. 매핑에 사용 중이면 호출 전에 막아야 한다 (이 함수는 검증 안 함)."""
+    """프로젝트 삭제. 매핑 사용 중인지는 caller 가 검증 (이 함수는 검증 안 함)."""
     cur = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     conn.commit()
     return cur.rowcount > 0
@@ -319,13 +343,25 @@ def set_mapping(
     *,
     project_id: int | None,
     excluded: bool = False,
+    weekly_project_name: str | None = None,
 ) -> None:
-    """카테고리 매핑 upsert. project_id=None + excluded=True 면 의도적 미입력."""
+    """카테고리 매핑 upsert.
+
+    project_id=None + excluded=True 면 의도적 미입력.
+    weekly_project_name: 주간업무보고 표 프로젝트명. 빈 문자열 정규화.
+    """
+    # 빈 문자열 → None 정규화 (NULL 과 빈 문자열을 같은 의미로 취급)
+    if weekly_project_name is not None:
+        normalized = weekly_project_name.strip()
+        weekly_project_name = normalized or None
     conn.execute(
-        "INSERT INTO mappings(category, project_id, excluded) VALUES(?, ?, ?) "
+        "INSERT INTO mappings(category, project_id, excluded, weekly_project_name) "
+        "VALUES(?, ?, ?, ?) "
         "ON CONFLICT(category) DO UPDATE SET "
-        "  project_id = excluded.project_id, excluded = excluded.excluded",
-        (category, project_id, 1 if excluded else 0),
+        "  project_id = excluded.project_id, "
+        "  excluded = excluded.excluded, "
+        "  weekly_project_name = excluded.weekly_project_name",
+        (category, project_id, 1 if excluded else 0, weekly_project_name),
     )
     conn.commit()
 
@@ -335,7 +371,7 @@ def get_mapping(
 ) -> dict[str, Any] | None:
     """카테고리 매핑 + 프로젝트명을 함께 반환. 없으면 None."""
     row = conn.execute(
-        "SELECT m.category, m.project_id, m.excluded, "
+        "SELECT m.category, m.project_id, m.excluded, m.weekly_project_name, "
         "       p.name AS project_name, p.work_type AS project_work_type "
         "FROM mappings m LEFT JOIN projects p ON p.id = m.project_id "
         "WHERE m.category = ?",
@@ -355,7 +391,7 @@ def list_mappings(
     since_date=None 이면 entries 전체 (legacy 동작).
     """
     rows = conn.execute(
-        "SELECT m.category, m.project_id, m.excluded, "
+        "SELECT m.category, m.project_id, m.excluded, m.weekly_project_name, "
         "       p.name AS project_name, p.work_type AS project_work_type "
         "FROM mappings m LEFT JOIN projects p ON p.id = m.project_id"
     ).fetchall()
@@ -388,6 +424,7 @@ def list_mappings(
             "project_id": None,
             "excluded": False,
             "project_name": None,
+            "weekly_project_name": None,
         })
     result.sort(key=lambda x: x["category"])
     return result
@@ -523,7 +560,10 @@ def cleanup_obsolete_default_settings(
         if row["value"] in obsolete_values:
             conn.execute("DELETE FROM settings WHERE key = ?", (key,))
             deleted += 1
-            logger.info("Removed obsolete-default setting %r (will fall back to new default)", key)
+            logger.info(
+                "Removed obsolete-default setting %r (falls back to new default)",
+                key,
+            )
     if deleted:
         conn.commit()
     return deleted
@@ -595,3 +635,40 @@ def upsert_daily_meta(
         (date, source_commit, misc_note),
     )
     conn.commit()
+
+
+# ─── weekly_reports ───────────────────────────────────
+
+
+def get_weekly_report(
+    conn: sqlite3.Connection, week_iso: str
+) -> dict[str, Any]:
+    """그 주의 보고 rows + updated_at 반환. 없으면 빈 rows."""
+    row = conn.execute(
+        "SELECT rows_json, updated_at FROM weekly_reports WHERE week_iso = ?",
+        (week_iso,),
+    ).fetchone()
+    if row is None:
+        return {"week_iso": week_iso, "rows": [], "updated_at": None}
+    return {
+        "week_iso": week_iso,
+        "rows": json.loads(row["rows_json"]),
+        "updated_at": row["updated_at"],
+    }
+
+
+def upsert_weekly_report(
+    conn: sqlite3.Connection, week_iso: str, rows: list[dict]
+) -> str:
+    """rows 를 그 주의 보고로 저장. updated_at 갱신. 반환: 새 updated_at ISO."""
+    updated_at = datetime.datetime.now().isoformat(timespec="seconds")
+    conn.execute(
+        "INSERT INTO weekly_reports(week_iso, rows_json, updated_at) "
+        "VALUES(?, ?, ?) "
+        "ON CONFLICT(week_iso) DO UPDATE SET "
+        "  rows_json = excluded.rows_json, "
+        "  updated_at = excluded.updated_at",
+        (week_iso, json.dumps(rows, ensure_ascii=False), updated_at),
+    )
+    conn.commit()
+    return updated_at

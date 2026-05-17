@@ -1,6 +1,6 @@
 """에러 계층 테스트."""
 
-from angeldash.errors import (
+from angeldash._common.errors import (
     AngelNetError,
     ApiError,
     AuthError,

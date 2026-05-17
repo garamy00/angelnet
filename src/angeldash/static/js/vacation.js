@@ -1,4 +1,5 @@
 import { apiGet, toast } from './api.js';
+import { initHeader } from './header.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
@@ -84,3 +85,4 @@ sel.addEventListener('change', refresh);
 document.getElementById('refresh').addEventListener('click', refresh);
 
 refresh();
+initHeader();

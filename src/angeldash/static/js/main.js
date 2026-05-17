@@ -3,29 +3,59 @@ import {
   isoWeek, weekDates, formatDateLabel,
   debounce, toast, flash, startProgress,
 } from './api.js';
+import { initHeader } from './header.js';
+import { icon } from './icons.js';
+import { initOngoingSchedule } from './ongoing_schedule.js';
+import { loadWeekSidebar, highlightCurrent } from './week_sidebar.js';
 
 let currentWeek = isoWeek(new Date());
 let currentData = { days: [], note: '', vacations: [], holidays: [] };
 
-async function loadMe() {
+// 최근 카테고리를 datalist 에 채워 카테고리 input 자동완성에 사용.
+async function refreshCategorySuggestions() {
   try {
-    const me = await apiGet('/api/me');
-    document.getElementById('user-label').textContent = `${me.name}(${me.user_id})`;
+    const cats = await apiGet('/api/categories/recent?days=14');
+    const dl = document.getElementById('category-suggestions');
+    if (!dl) return;
+    dl.innerHTML = cats.map(
+      (c) => `<option value="${c.replace(/"/g, '&quot;')}"></option>`,
+    ).join('');
   } catch (e) {
-    document.getElementById('user-label').textContent = '(로그인 실패)';
+    console.error('category suggestions fetch failed', e);
   }
+}
+
+// 사이드바 (저장된 일일업무보고 목록) 재로드 — 저장/네비게이션 후 호출.
+function reloadWeekSidebar() {
+  loadWeekSidebar({
+    indexUrl: '/api/weeks/index',
+    currentWeek,
+    navigate: navigateToWeek,
+  });
+}
+
+function navigateToWeek(weekIso) {
+  currentWeek = weekIso;
+  loadWeek();
+  highlightCurrent(weekIso);
 }
 
 async function applySyncToggles() {
   try {
     const s = await apiGet('/api/settings');
-    const upnoteOn = (s['upnote.enabled'] ?? 'true').toString().toLowerCase() === 'true';
+    const upnoteOn = (s['upnote.enabled'] ?? 'false').toString().toLowerCase() === 'true';
     const notionOn = (s['notion.enabled'] ?? 'false').toString().toLowerCase() === 'true';
     const upBtn = document.getElementById('btn-upnote');
     const noBtn = document.getElementById('btn-notion');
-    // inline display 로 강제 (hidden 속성이 flex 컨테이너의 다른 룰에 의해 무시되는 케이스 회피)
-    upBtn.style.display = upnoteOn ? '' : 'none';
-    noBtn.style.display = notionOn ? '' : 'none';
+    // 단일 버튼이 들어있는 action-group 전체를 숨김 (구분선까지 함께 제거)
+    if (upBtn) {
+      const grp = upBtn.closest('.action-group') || upBtn;
+      grp.style.display = upnoteOn ? '' : 'none';
+    }
+    if (noBtn) {
+      const grp = noBtn.closest('.action-group') || noBtn;
+      grp.style.display = notionOn ? '' : 'none';
+    }
   } catch (e) {
     console.error('sync toggles fetch failed', e);
   }
@@ -94,11 +124,11 @@ function updateExcelButtonLabel() {
   const month = parseInt(mStr, 10);
   const thisYear = new Date().getFullYear();
   const label = year === thisYear
-    ? `📥 ${month}월 타임시트 다운로드`
-    : `📥 ${year % 100}년 ${month}월 타임시트 다운로드`;
+    ? `<i data-lucide="download"></i> ${month}월 타임시트 다운로드`
+    : `<i data-lucide="download"></i> ${year % 100}년 ${month}월 타임시트 다운로드`;
   const btn = document.getElementById('btn-excel');
   if (btn) {
-    btn.textContent = label;
+    btn.innerHTML = label;
     btn.title = `${ym} 의 회사 시스템 Excel 다운로드`;
   }
 }
@@ -110,6 +140,9 @@ function renderDay(day, vacations, holiday) {
   if (isToday) wrap.classList.add('day-block--today');
   if (holiday) wrap.classList.add('day-block--holiday');
   wrap.dataset.date = day.date;
+  // 좌측 stripe 색상 결정용 — CSS 가 [data-weekday], [data-has-vacation] 셀렉터 사용
+  wrap.dataset.weekday = String(new Date(day.date + 'T00:00:00').getDay());
+  wrap.dataset.hasVacation = vacations.length > 0 ? 'true' : 'false';
   // 휴가 시간은 updateDayTotals 에서 entries 합과 함께 더해 합계에 반영한다.
   const totalVacHours = vacations.reduce((a, v) => a + v.hours, 0);
   wrap.dataset.vacationHours = String(totalVacHours);
@@ -117,10 +150,10 @@ function renderDay(day, vacations, holiday) {
   const header = document.createElement('div');
   header.className = 'day-header';
   const vacLabel = vacations.length
-    ? ` <span class="vacation-tag">🏖 휴가 ${totalVacHours}h</span>`
+    ? ` <span class="vacation-tag"><i data-lucide="tent"></i> 휴가 ${totalVacHours}h</span>`
     : '';
   const holLabel = holiday
-    ? ` <span class="holiday-tag">🎌 ${escapeHtml(holiday.label)}</span>`
+    ? ` <span class="holiday-tag"><i data-lucide="flag"></i> ${escapeHtml(holiday.label)}</span>`
     : '';
   const todayBadge = isToday ? ' <span class="today-tag">오늘</span>' : '';
   header.innerHTML = `<span>${formatDateLabel(day.date)}${todayBadge}${holLabel}${vacLabel}</span>`;
@@ -130,7 +163,7 @@ function renderDay(day, vacations, holiday) {
     const reportBtn = document.createElement('button');
     reportBtn.className = 'btn-day-report';
     reportBtn.title = '오늘 보고 클립보드에 복사';
-    reportBtn.textContent = '📋 팀장 보고 복사';
+    reportBtn.innerHTML = '<i data-lucide="clipboard-list"></i> <span>팀장 보고 복사</span>';
     reportBtn.addEventListener('click', () => doTeamReportCopy(day.date));
     right.appendChild(reportBtn);
   }
@@ -144,7 +177,7 @@ function renderDay(day, vacations, holiday) {
   for (const v of vacations) {
     const row = document.createElement('div');
     row.className = 'vacation-row';
-    row.innerHTML = `🏖 <strong>${escapeHtml(v.type)}</strong> ${v.hours}h <span class="muted">(회사 시스템 — 수정 불가)</span>`;
+    row.innerHTML = `<i data-lucide="tent"></i> <strong>${escapeHtml(v.type)}</strong> ${v.hours}h <span class="muted">(회사 시스템 — 수정 불가)</span>`;
     wrap.appendChild(row);
   }
 
@@ -175,7 +208,7 @@ function renderDay(day, vacations, holiday) {
     <div class="meta-misc-row">
       <strong>기타:</strong>
       <textarea class="meta-misc" placeholder="예: 내일 연차입니다"></textarea>
-      <button class="meta-auto-btn" type="button" title="휴가 정보로 자동 채우기">🔄 자동</button>
+      <button class="meta-auto-btn" type="button" title="휴가 정보로 자동 채우기"><i data-lucide="refresh-cw"></i> 자동</button>
     </div>
   `;
   wrap.appendChild(metaSection);
@@ -239,12 +272,14 @@ function renderEntry(entry) {
   row.className = 'entry';
   row.innerHTML = `
     <div class="entry-header">
-      <input class="category" type="text" placeholder="카테고리"
+      <input class="category" type="text" list="category-suggestions"
+             placeholder="카테고리" autocomplete="off"
              value="${escapeHtml(entry.category)}">
-      <input class="hours" type="number" min="0" max="24" step="0.5"
+      <input class="hours" type="number" min="0" max="24" step="1"
              value="${entry.hours}">
-      <span>h</span>
-      <button class="remove">×</button>
+      <span class="hours-unit">h</span>
+      <span class="entry-spacer"></span>
+      <button class="remove icon-only" type="button" title="이 카테고리 삭제" aria-label="카테고리 삭제">${icon('trash-2')}</button>
     </div>
     <textarea class="entry-body" placeholder="본문 (markdown)">${escapeHtml(entry.body_md)}</textarea>
   `;
@@ -311,6 +346,9 @@ async function saveDay(date) {
   const entries = collectEntries(block);
   try {
     await apiPut(`/api/days/${date}`, { week_iso: currentWeek, entries });
+    // 저장 직후 사이드바·카테고리 자동완성 갱신 (새 주차/카테고리 즉시 반영)
+    reloadWeekSidebar();
+    refreshCategorySuggestions();
   } catch (e) {
     toast(`저장 실패: ${e.message}`, 'fail');
   }
@@ -333,14 +371,17 @@ document.getElementById('week-note').addEventListener(
 document.getElementById('this-week').addEventListener('click', () => {
   currentWeek = isoWeek(new Date());
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 document.getElementById('prev-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, -1);
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 document.getElementById('next-week').addEventListener('click', () => {
   currentWeek = shiftWeek(currentWeek, +1);
   loadWeek();
+  highlightCurrent(currentWeek);
 });
 
 function shiftWeek(weekIso, delta) {
@@ -394,10 +435,15 @@ document.getElementById('btn-notion').addEventListener('click', async () => {
   }
 });
 
+// btn-verify 버튼과 btn-timesheet 입력 후 자동 호출에서 공용으로 쓰는 verify 핵심 로직.
+async function runTimesheetVerify() {
+  const data = await apiGet(`/api/timesheet/verify?week_iso=${currentWeek}`);
+  applyVerifyResult(data.items);
+}
+
 document.getElementById('btn-verify').addEventListener('click', async () => {
   try {
-    const data = await apiGet(`/api/timesheet/verify?week_iso=${currentWeek}`);
-    applyVerifyResult(data.items);
+    await runTimesheetVerify();
     toast('타임시트 확인 완료');
   } catch (e) {
     toast(`실패: ${e.message}`, 'fail');
@@ -474,6 +520,7 @@ function applyVerifyResult(items) {
           await apiPost('/api/actions/timesheet-push-one', {
             date: info.date,
             task_name: info.task_name,
+            task_work_type: info.task_work_type || '',
             hours: info.local_task_total,
           });
           toast('회사 시스템에 푸시됨');
@@ -495,20 +542,26 @@ function applyVerifyResult(items) {
     if (!block) continue;
     const row = document.createElement('div');
     row.className = 'orphan-row';
+    const wt = (it.task_work_type || '').trim();
+    const wtTag = wt
+      ? ` <span class="work-type-tag">[${escapeHtml(wt)}]</span>`
+      : '';
+    const fullLabel = wt ? `${it.task_name} [${wt}]` : it.task_name;
     row.innerHTML = `
       <span class="muted">⚠️ 회사 시스템에만 있음:</span>
-      <strong>${escapeHtml(it.task_name)}</strong> ${it.remote_hours}h
+      <strong>${escapeHtml(it.task_name)}</strong>${wtTag} ${it.remote_hours}h
     `;
     const delBtn = document.createElement('button');
     delBtn.textContent = '회사에서 삭제';
     delBtn.className = 'orphan-delete';
     delBtn.addEventListener('click', async () => {
-      if (!confirm(`회사 시스템에서 [${it.task_name}] ${it.date} ${it.remote_hours}h 를 삭제할까요? (hours=0 으로 update)`)) return;
+      if (!confirm(`회사 시스템에서 [${fullLabel}] ${it.date} ${it.remote_hours}h 를 삭제할까요? (hours=0 으로 update)`)) return;
       delBtn.disabled = true;
       try {
         await apiPost('/api/actions/timesheet-push-one', {
           date: it.date,
           task_name: it.task_name,
+          task_work_type: it.task_work_type || '',
           hours: 0,
         });
         toast('회사 시스템에서 삭제됨');
@@ -544,6 +597,12 @@ document.getElementById('btn-timesheet').addEventListener('click', async () => {
     const real = await apiPost('/api/actions/timesheet-submit',
       { ...body, dry_run: false });
     toast(`타임시트 입력 완료 (${(real.results || []).length}건)`);
+    // 입력 직후 회사 시스템과의 정합성을 즉시 badge 로 표시 (조용히 실행)
+    try {
+      await runTimesheetVerify();
+    } catch (e) {
+      toast(`자동 확인 실패: ${e.message}`, 'fail');
+    }
   } catch (e) {
     toast(`실패: ${e.message}`, 'fail');
   }
@@ -580,8 +639,171 @@ document.getElementById('btn-excel').addEventListener('click', async () => {
   }
 });
 
+// ─── 이번달 타임시트 미리보기 모달 ──────────────────
+
+const KR_DAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
+
+function openMonthlyModal() {
+  document.getElementById('monthly-modal').hidden = false;
+}
+function closeMonthlyModal() {
+  document.getElementById('monthly-modal').hidden = true;
+}
+document.getElementById('monthly-modal-close').addEventListener('click', closeMonthlyModal);
+document.querySelector('#monthly-modal .modal-backdrop').addEventListener('click', closeMonthlyModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('monthly-modal').hidden) {
+    closeMonthlyModal();
+  }
+});
+
+function renderMonthlyGrid(data) {
+  const body = document.getElementById('monthly-modal-body');
+  document.getElementById('monthly-modal-title').textContent =
+    `<i data-lucide="table"></i> ${data.year_month} 타임시트 (회사 시스템)`;
+
+  const hasTasks = data.tasks && data.tasks.length > 0;
+  const hasVacs = data.vacations && data.vacations.length > 0;
+  if (!hasTasks && !hasVacs) {
+    body.innerHTML = '<p class="muted">이번달 입력된 task / 휴가가 없습니다.</p>';
+    return;
+  }
+
+  const [yStr, mStr] = data.year_month.split('-');
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+  const dim = data.days_in_month;
+
+  const dayOfWeek = (d) => {
+    const dt = new Date(Date.UTC(year, month - 1, d));
+    return dt.getUTCDay();
+  };
+
+  // 공휴일 day 집합 (출근일 label 제외된 것만 서버가 보내줌)
+  const holidayDays = new Map();  // day → label
+  for (const h of (data.holidays || [])) {
+    holidayDays.set(h.day, h.label);
+  }
+
+  const escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+  const esc = (s) => String(s || '').replace(/[&<>]/g, (c) => escMap[c]);
+
+  // 일자 헤더의 클래스 — 휴일/주말 색칠 + 셀에도 동일 적용
+  const dayClass = (d) => {
+    const dow = dayOfWeek(d);
+    if (holidayDays.has(d)) return 'hol';
+    if (dow === 0) return 'sun';
+    if (dow === 6) return 'sat';
+    return '';
+  };
+  const dayLabel = (d) => {
+    const dow = dayOfWeek(d);
+    return KR_DAY_SHORT[dow];
+  };
+
+  // 히트맵 단계 — hours / 8 비율을 alpha 로. 8h+ 는 한 단계 더 진하게.
+  // 0=투명, 1=옅음, 2=중간, 3=진함, 4=가장 진함 (overtime)
+  const heatLevel = (h) => {
+    if (!h || h <= 0) return 0;
+    if (h <= 2) return 1;
+    if (h <= 4) return 2;
+    if (h <= 7) return 3;
+    if (h <= 8) return 4;
+    return 5;  // overtime
+  };
+
+  const cellClasses = (h, d, kind = 'task') => {
+    const dow = dayOfWeek(d);
+    const bg = holidayDays.has(d)
+      ? 'bg-hol'
+      : ((dow === 0 || dow === 6) ? 'bg-wknd' : '');
+    const lvl = heatLevel(h);
+    const prefix = kind === 'vac' ? 'vac-l' : 'task-l';
+    return `cell ${bg} ${prefix}${lvl}`;
+  };
+
+  // 헤더
+  let thead = '<thead><tr><th class="task-col">프로젝트(task)</th>';
+  for (let d = 1; d <= dim; d += 1) {
+    const cls = dayClass(d);
+    const title = holidayDays.has(d) ? ` title="${esc(holidayDays.get(d))}"` : '';
+    thead += `<th class="day-col ${cls}"${title}>${d}<br><small>${dayLabel(d)}</small></th>`;
+  }
+  thead += '<th class="total-col">합계</th></tr></thead>';
+
+  // 셀 tooltip — hours + day 정보
+  const cellTitle = (h, d) => {
+    if (!h) return '';
+    return ` title="${d}일: ${h}h"`;
+  };
+
+  // 본문 — task rows
+  let tbody = '<tbody>';
+  for (const t of data.tasks) {
+    tbody += '<tr>';
+    tbody += `<td class="task-col" title="${esc(t.task_name)}">${esc(t.task_name)}</td>`;
+    for (let d = 1; d <= dim; d += 1) {
+      const h = t.days[d] || 0;
+      tbody += `<td class="${cellClasses(h, d, 'task')}"${cellTitle(h, d)}>${h || ''}</td>`;
+    }
+    tbody += `<td class="total-col"><b>${t.total}</b></td>`;
+    tbody += '</tr>';
+  }
+
+  // 휴가 rows (있을 때만, 별도 그룹으로 시각 구분)
+  if (hasVacs) {
+    for (let i = 0; i < data.vacations.length; i += 1) {
+      const v = data.vacations[i];
+      const groupCls = i === 0 ? ' vac-row vac-first' : ' vac-row';
+      tbody += `<tr class="${groupCls.trim()}">`;
+      tbody += `<td class="task-col vac-label" title="휴가 — ${esc(v.label)}"><i data-lucide="tent"></i> 휴가 — ${esc(v.label)}</td>`;
+      for (let d = 1; d <= dim; d += 1) {
+        const h = v.days[d] || 0;
+        tbody += `<td class="${cellClasses(h, d, 'vac')}"${cellTitle(h, d)}>${h || ''}</td>`;
+      }
+      tbody += `<td class="total-col"><b>${v.total}</b></td>`;
+      tbody += '</tr>';
+    }
+  }
+  tbody += '</tbody>';
+
+  // 합계 행
+  let tfoot = '<tfoot><tr><td class="task-col"><b>일별 합계</b></td>';
+  for (let d = 1; d <= dim; d += 1) {
+    const h = data.daily_totals[d] || 0;
+    tfoot += `<td class="${cellClasses(h, d, 'task')}"${cellTitle(h, d)}><b>${h || ''}</b></td>`;
+  }
+  tfoot += `<td class="total-col"><b>${data.month_total}</b></td>`;
+  tfoot += '</tr></tfoot>';
+
+  body.innerHTML = `<table class="monthly-grid">${thead}${tbody}${tfoot}</table>`;
+}
+
+document.getElementById('btn-monthly-preview').addEventListener('click', async () => {
+  const ym = monthsForWeek(currentWeek)[0];  // 현재 주가 속한 월
+  document.getElementById('monthly-modal-title').textContent =
+    `<i data-lucide="table"></i> ${ym} 타임시트 (회사 시스템) — 로딩…`;
+  document.getElementById('monthly-modal-body').innerHTML =
+    '<p class="muted">회사 시스템에서 fetch 중… (몇 초 소요)</p>';
+  openMonthlyModal();
+  try {
+    const data = await apiGet(`/api/timesheet/monthly-grid?year_month=${ym}`);
+    renderMonthlyGrid(data);
+  } catch (e) {
+    document.getElementById('monthly-modal-body').innerHTML =
+      `<p class="muted">실패: ${e.message}</p>`;
+    toast(`미리보기 실패: ${e.message}`, 'fail');
+  }
+});
+
 (async () => {
-  await loadMe();
   await applySyncToggles();
   await loadWeek();
+  // 주차 이동 후 사이드바 highlight 만 갱신
+  highlightCurrent(currentWeek);
 })();
+
+initHeader();
+initOngoingSchedule();
+refreshCategorySuggestions();
+reloadWeekSidebar();

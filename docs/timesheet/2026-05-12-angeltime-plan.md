@@ -65,6 +65,7 @@
 ### Task 1: Project scaffolding + git init
 
 **Files:**
+
 - Create: `pyproject.toml`
 - Create: `.gitignore`
 - Create: `README.md`
@@ -157,7 +158,7 @@ build/
 
 - [ ] **Step 4: README.md 최소 골격 작성**
 
-```markdown
+````markdown
 # angeltime
 
 일일 업무 보고를 한 번 작성하면 팀장 보고(클립보드) / UpNote / 사내 타임시트로 분배하는 단일 사용자 로컬 도구.
@@ -172,6 +173,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+````
 
 ## 실행
 
@@ -191,7 +193,8 @@ export ANGELNET_USER=youruserid   # 한 번만, ~/.zshrc 등에 영구 저장 �
 ```
 
 자세한 설계는 [docs/superpowers/specs/2026-05-12-angeltime-design.md](docs/superpowers/specs/2026-05-12-angeltime-design.md) 참조.
-```
+
+````
 
 - [ ] **Step 5: 빈 패키지 마커 생성**
 
@@ -199,7 +202,7 @@ export ANGELNET_USER=youruserid   # 한 번만, ~/.zshrc 등에 영구 저장 �
 
 ```python
 """angeltime — 일일 업무 보고 통합 도구."""
-```
+````
 
 `tests/__init__.py`: 빈 파일.
 
@@ -243,6 +246,7 @@ git commit -m "chore: project scaffolding"
 ### Task 2: errors.py 모듈
 
 **Files:**
+
 - Create: `src/angeltime/errors.py`
 - Create: `tests/test_errors.py`
 
@@ -363,6 +367,7 @@ git commit -m "feat: add domain exception hierarchy"
 ### Task 3: auth.py 모듈 (angelnet 복제)
 
 **Files:**
+
 - Create: `src/angeltime/auth.py`
 - Create: `tests/test_auth.py`
 
@@ -536,6 +541,7 @@ git commit -m "feat: add KeychainStore (shared service with angelnet)"
 ### Task 4: models.py — Pydantic 모델
 
 **Files:**
+
 - Create: `src/angeltime/models.py`
 - Create: `tests/test_models.py`
 
@@ -777,6 +783,7 @@ git commit -m "feat: add Pydantic models"
 ### Task 5: db.py — SQLite 연결 + 스키마
 
 **Files:**
+
 - Create: `src/angeltime/db.py`
 - Create: `tests/test_db.py`
 - Modify: `tests/conftest.py`
@@ -1274,6 +1281,7 @@ git commit -m "feat: add SQLite schema and repository functions"
 ### Task 6: templates.py — 기본 출력 템플릿 상수
 
 **Files:**
+
 - Create: `src/angeltime/templates.py`
 - Create: `tests/test_templates.py`
 
@@ -1395,6 +1403,7 @@ git commit -m "feat: add default output templates"
 ### Task 7: formatter.py — Jinja2 sandboxed env + context builder + renderer
 
 **Files:**
+
 - Create: `src/angeltime/formatter.py`
 - Create: `tests/test_formatter.py`
 
@@ -1811,6 +1820,7 @@ git commit -m "feat: add Jinja2 sandboxed formatter with context builders"
 ### Task 8: upnote.py — x-callback-url 빌더 + subprocess open
 
 **Files:**
+
 - Create: `src/angeltime/upnote.py`
 - Create: `tests/test_upnote.py`
 
@@ -1986,6 +1996,7 @@ git commit -m "feat: add UpNote x-callback-url adapter"
 ### Task 9: client.py — timesheet.uangel.com login (angelnet 복제)
 
 **Files:**
+
 - Create: `src/angeltime/client.py`
 - Create: `tests/test_client.py`
 
@@ -2277,6 +2288,7 @@ git commit -m "feat: add TimesheetClient.login (angelnet pattern)"
 ### Task 10: server.py — 앱 골격 + lifespan + /api/me
 
 **Files:**
+
 - Create: `src/angeltime/server.py`
 - Modify: `tests/conftest.py` (FastAPI TestClient 픽스처 추가)
 
@@ -2480,14 +2492,14 @@ def build_app(
 ```html
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <title>angeltime</title>
-</head>
-<body>
-  <h1>angeltime</h1>
-  <p>아직 UI 가 구현되지 않았습니다.</p>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>angeltime</title>
+  </head>
+  <body>
+    <h1>angeltime</h1>
+    <p>아직 UI 가 구현되지 않았습니다.</p>
+  </body>
 </html>
 ```
 
@@ -2511,6 +2523,7 @@ git commit -m "feat: add FastAPI app skeleton with /api/me and static serving"
 ### Task 11: server.py — Reports API (entries CRUD)
 
 **Files:**
+
 - Modify: `src/angeltime/server.py` (라우트 추가)
 - Modify: `tests/test_server.py`
 
@@ -2674,6 +2687,7 @@ git commit -m "feat: add reports/week-notes CRUD API"
 ### Task 12: server.py — Projects + Mappings API
 
 **Files:**
+
 - Modify: `src/angeltime/server.py`
 - Modify: `tests/test_server.py`
 
@@ -2800,6 +2814,7 @@ git commit -m "feat: add projects/mappings CRUD API"
 ### Task 13: server.py — Settings + Action logs API
 
 **Files:**
+
 - Modify: `src/angeltime/server.py`
 - Modify: `tests/test_server.py`
 
@@ -2990,6 +3005,7 @@ git commit -m "feat: add settings + logs API with template validation/preview"
 ### Task 14: server.py — Action: team-report (텍스트 생성)
 
 **Files:**
+
 - Modify: `src/angeltime/server.py`
 - Modify: `tests/test_server.py`
 
@@ -3112,6 +3128,7 @@ git commit -m "feat: add team-report action API"
 ### Task 15: server.py — Action: upnote-sync (subprocess open 호출)
 
 **Files:**
+
 - Modify: `src/angeltime/server.py`
 - Modify: `tests/test_server.py`
 
@@ -3253,6 +3270,7 @@ git commit -m "feat: add upnote-sync action API with dry-run"
 ### Task 16: Static — API client + 공통 스타일
 
 **Files:**
+
 - Create: `src/angeltime/static/js/api.js`
 - Create: `src/angeltime/static/css/main.css`
 
@@ -3267,44 +3285,49 @@ git commit -m "feat: add upnote-sync action API with dry-run"
 // 에러는 throw, 성공은 응답 본문(JSON) 반환.
 
 export async function apiGet(path) {
-  const r = await fetch(path, { headers: { 'Accept': 'application/json' } });
-  if (!r.ok) throw new Error(`GET ${path} failed: ${r.status} ${await r.text()}`);
+  const r = await fetch(path, { headers: { Accept: "application/json" } });
+  if (!r.ok)
+    throw new Error(`GET ${path} failed: ${r.status} ${await r.text()}`);
   return r.json();
 }
 
 export async function apiPut(path, body) {
   const r = await fetch(path, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`PUT ${path} failed: ${r.status} ${await r.text()}`);
+  if (!r.ok)
+    throw new Error(`PUT ${path} failed: ${r.status} ${await r.text()}`);
   return r.json();
 }
 
 export async function apiPost(path, body) {
   const r = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`POST ${path} failed: ${r.status} ${await r.text()}`);
+  if (!r.ok)
+    throw new Error(`POST ${path} failed: ${r.status} ${await r.text()}`);
   return r.json();
 }
 
 // ISO 주 계산: 어떤 Date 객체 -> 'YYYY-Www' 문자열.
 export function isoWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
   const day = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
 // ISO 주 -> 그 주의 월요일 ~ 금요일 날짜 5개 (YYYY-MM-DD).
 export function weekDates(weekIso) {
-  const [yearStr, wStr] = weekIso.split('-W');
+  const [yearStr, wStr] = weekIso.split("-W");
   const year = parseInt(yearStr, 10);
   const week = parseInt(wStr, 10);
   const jan4 = new Date(Date.UTC(year, 0, 4));
@@ -3320,12 +3343,12 @@ export function weekDates(weekIso) {
   });
 }
 
-const DAY_KR = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_KR = ["월", "화", "수", "목", "금", "토", "일"];
 export function formatDateLabel(yyyyMmDd) {
-  const [y, m, d] = yyyyMmDd.split('-').map((v) => parseInt(v, 10));
+  const [y, m, d] = yyyyMmDd.split("-").map((v) => parseInt(v, 10));
   const date = new Date(Date.UTC(y, m - 1, d));
   const day = (date.getUTCDay() || 7) - 1;
-  return `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')} (${DAY_KR[day]})`;
+  return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")} (${DAY_KR[day]})`;
 }
 
 // 디바운스 헬퍼.
@@ -3338,8 +3361,8 @@ export function debounce(fn, ms) {
 }
 
 // 토스트 알림.
-export function toast(message, kind = 'ok') {
-  const el = document.createElement('div');
+export function toast(message, kind = "ok") {
+  const el = document.createElement("div");
   el.className = `toast toast--${kind}`;
   el.textContent = message;
   document.body.appendChild(el);
@@ -3365,13 +3388,17 @@ export function toast(message, kind = 'ok') {
   --radius: 6px;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-               "Segoe UI", Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI",
+    Roboto, sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
   font-size: 14px;
@@ -3394,7 +3421,9 @@ header nav a {
   font-weight: 500;
 }
 
-header nav a.active { color: var(--color-accent); }
+header nav a.active {
+  color: var(--color-accent);
+}
 
 main {
   max-width: 960px;
@@ -3417,7 +3446,9 @@ button.primary {
   border-color: var(--color-accent);
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 6px 10px;
@@ -3477,8 +3508,12 @@ textarea {
   color: var(--color-muted);
 }
 
-.totals.ok { color: var(--color-success); }
-.totals.warn { color: var(--color-warn); }
+.totals.ok {
+  color: var(--color-success);
+}
+.totals.warn {
+  color: var(--color-warn);
+}
 
 .actions-bar {
   position: sticky;
@@ -3500,11 +3535,13 @@ textarea {
   color: white;
   padding: 10px 16px;
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
 }
 
-.toast--fail { background: var(--color-danger); }
+.toast--fail {
+  background: var(--color-danger);
+}
 
 .week-notes textarea {
   width: 100%;
@@ -3524,6 +3561,7 @@ git commit -m "feat: add frontend API client and base styles"
 ### Task 17: Static — Main page (week report)
 
 **Files:**
+
 - Replace: `src/angeltime/static/index.html`
 - Create: `src/angeltime/static/js/main.js`
 
@@ -3534,49 +3572,56 @@ git commit -m "feat: add frontend API client and base styles"
 ```html
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <title>angeltime</title>
-  <link rel="stylesheet" href="/static/css/main.css">
-</head>
-<body>
-  <header>
-    <nav>
-      <a href="/" class="active">📅 보고서</a>
-      <a href="/projects.html">🗂 프로젝트</a>
-      <a href="/logs.html">📋 로그</a>
-      <a href="/settings.html">⚙️ 설정</a>
-    </nav>
-    <span id="user-label" class="muted"></span>
-  </header>
-  <main>
-    <section class="week-header">
-      <button id="prev-week">◀ 이전 주</button>
-      <span id="week-label">로딩…</span>
-      <button id="this-week">이번 주</button>
-      <button id="next-week">다음 주 ▶</button>
-    </section>
+  <head>
+    <meta charset="utf-8" />
+    <title>angeltime</title>
+    <link rel="stylesheet" href="/static/css/main.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/" class="active">📅 보고서</a>
+        <a href="/projects.html">🗂 프로젝트</a>
+        <a href="/logs.html">📋 로그</a>
+        <a href="/settings.html">⚙️ 설정</a>
+      </nav>
+      <span id="user-label" class="muted"></span>
+    </header>
+    <main>
+      <section class="week-header">
+        <button id="prev-week">◀ 이전 주</button>
+        <span id="week-label">로딩…</span>
+        <button id="this-week">이번 주</button>
+        <button id="next-week">다음 주 ▶</button>
+      </section>
 
-    <section id="days"></section>
+      <section id="days"></section>
 
-    <section class="week-notes">
-      <h3>📝 이번 주 메모 (UpNote 동기화에만 포함)</h3>
-      <textarea id="week-note" placeholder="자유 메모…"></textarea>
-    </section>
+      <section class="week-notes">
+        <h3>📝 이번 주 메모(UpNote/Notion 에 저장됨)</h3>
+        <textarea id="week-note" placeholder="자유 메모…"></textarea>
+      </section>
 
-    <section class="actions-bar">
-      <span>대상:</span>
-      <select id="target">
-        <option value="week">이번 주 전체</option>
-        <option value="today">오늘만</option>
-      </select>
-      <button class="primary" id="btn-report">📋 팀장 보고 복사</button>
-      <button class="primary" id="btn-timesheet" disabled title="Phase 7 이후 활성">📤 타임시트 입력</button>
-      <button class="primary" id="btn-upnote">🔄 UpNote 저장</button>
-    </section>
-  </main>
-  <script type="module" src="/static/js/main.js"></script>
-</body>
+      <section class="actions-bar">
+        <span>대상:</span>
+        <select id="target">
+          <option value="week">이번 주 전체</option>
+          <option value="today">오늘만</option>
+        </select>
+        <button class="primary" id="btn-report">📋 팀장 보고 복사</button>
+        <button
+          class="primary"
+          id="btn-timesheet"
+          disabled
+          title="Phase 7 이후 활성"
+        >
+          📤 타임시트 입력
+        </button>
+        <button class="primary" id="btn-upnote">🔄 UpNote 저장</button>
+      </section>
+    </main>
+    <script type="module" src="/static/js/main.js"></script>
+  </body>
 </html>
 ```
 
@@ -3586,20 +3631,26 @@ git commit -m "feat: add frontend API client and base styles"
 
 ```javascript
 import {
-  apiGet, apiPut, apiPost,
-  isoWeek, weekDates, formatDateLabel,
-  debounce, toast,
-} from './api.js';
+  apiGet,
+  apiPut,
+  apiPost,
+  isoWeek,
+  weekDates,
+  formatDateLabel,
+  debounce,
+  toast,
+} from "./api.js";
 
 let currentWeek = isoWeek(new Date());
-let currentData = { days: [], note: '' };
+let currentData = { days: [], note: "" };
 
 async function loadMe() {
   try {
-    const me = await apiGet('/api/me');
-    document.getElementById('user-label').textContent = `${me.name}(${me.user_id})`;
+    const me = await apiGet("/api/me");
+    document.getElementById("user-label").textContent =
+      `${me.name}(${me.user_id})`;
   } catch (e) {
-    document.getElementById('user-label').textContent = '(로그인 실패)';
+    document.getElementById("user-label").textContent = "(로그인 실패)";
   }
 }
 
@@ -3609,35 +3660,35 @@ async function loadWeek() {
     apiGet(`/api/weeks/${currentWeek}/note`),
   ]);
   currentData = {
-    days: weekResp.days,  // [{date, entries}]
+    days: weekResp.days, // [{date, entries}]
     note: noteResp.body_md,
   };
   render();
 }
 
 function render() {
-  document.getElementById('week-label').textContent = currentWeek;
+  document.getElementById("week-label").textContent = currentWeek;
   const dates = weekDates(currentWeek);
   const byDate = Object.fromEntries(currentData.days.map((d) => [d.date, d]));
-  const container = document.getElementById('days');
-  container.innerHTML = '';
+  const container = document.getElementById("days");
+  container.innerHTML = "";
   for (const date of dates) {
     const day = byDate[date] || { date, entries: [] };
     container.appendChild(renderDay(day));
   }
-  document.getElementById('week-note').value = currentData.note;
+  document.getElementById("week-note").value = currentData.note;
 }
 
 function renderDay(day) {
-  const wrap = document.createElement('div');
-  wrap.className = 'day-block';
+  const wrap = document.createElement("div");
+  wrap.className = "day-block";
   wrap.dataset.date = day.date;
 
-  const header = document.createElement('div');
-  header.className = 'day-header';
+  const header = document.createElement("div");
+  header.className = "day-header";
   header.innerHTML = `<span>${formatDateLabel(day.date)}</span>`;
-  const totals = document.createElement('span');
-  totals.className = 'totals';
+  const totals = document.createElement("span");
+  totals.className = "totals";
   header.appendChild(totals);
   wrap.appendChild(header);
 
@@ -3645,10 +3696,13 @@ function renderDay(day) {
     wrap.appendChild(renderEntry(entry));
   }
 
-  const addBtn = document.createElement('button');
-  addBtn.textContent = '+ 카테고리 추가';
-  addBtn.addEventListener('click', () => {
-    wrap.insertBefore(renderEntry({ category: '', hours: 0, body_md: '' }), addBtn);
+  const addBtn = document.createElement("button");
+  addBtn.textContent = "+ 카테고리 추가";
+  addBtn.addEventListener("click", () => {
+    wrap.insertBefore(
+      renderEntry({ category: "", hours: 0, body_md: "" }),
+      addBtn,
+    );
     saveDay(day.date);
   });
   wrap.appendChild(addBtn);
@@ -3658,8 +3712,8 @@ function renderDay(day) {
 }
 
 function renderEntry(entry) {
-  const row = document.createElement('div');
-  row.className = 'entry';
+  const row = document.createElement("div");
+  row.className = "entry";
   row.innerHTML = `
     <div class="entry-header">
       <input class="category" type="text" placeholder="카테고리"
@@ -3671,38 +3725,46 @@ function renderEntry(entry) {
     </div>
     <textarea class="entry-body" placeholder="본문 (markdown)">${escapeHtml(entry.body_md)}</textarea>
   `;
-  const date = row.closest('.day-block')?.dataset.date;
+  const date = row.closest(".day-block")?.dataset.date;
   const debounced = debounce(() => {
-    const d = row.closest('.day-block')?.dataset.date;
-    if (d) { saveDay(d); updateDayTotals(row.closest('.day-block')); }
+    const d = row.closest(".day-block")?.dataset.date;
+    if (d) {
+      saveDay(d);
+      updateDayTotals(row.closest(".day-block"));
+    }
   }, 600);
-  for (const el of row.querySelectorAll('input, textarea')) {
-    el.addEventListener('input', debounced);
+  for (const el of row.querySelectorAll("input, textarea")) {
+    el.addEventListener("input", debounced);
   }
-  row.querySelector('.remove').addEventListener('click', () => {
-    const block = row.closest('.day-block');
+  row.querySelector(".remove").addEventListener("click", () => {
+    const block = row.closest(".day-block");
     row.remove();
-    if (block) { saveDay(block.dataset.date); updateDayTotals(block); }
+    if (block) {
+      saveDay(block.dataset.date);
+      updateDayTotals(block);
+    }
   });
   return row;
 }
 
 function escapeHtml(s) {
-  return String(s ?? '')
-    .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function collectEntries(block) {
   const out = [];
-  for (const row of block.querySelectorAll('.entry')) {
-    const category = row.querySelector('.category').value.trim();
+  for (const row of block.querySelectorAll(".entry")) {
+    const category = row.querySelector(".category").value.trim();
     if (!category) continue;
     out.push({
       category,
-      hours: parseFloat(row.querySelector('.hours').value || '0'),
-      body_md: row.querySelector('.entry-body').value,
+      hours: parseFloat(row.querySelector(".hours").value || "0"),
+      body_md: row.querySelector(".entry-body").value,
     });
   }
   return out;
@@ -3710,11 +3772,11 @@ function collectEntries(block) {
 
 function updateDayTotals(block) {
   const sum = collectEntries(block).reduce((a, e) => a + (e.hours || 0), 0);
-  const totals = block.querySelector('.totals');
+  const totals = block.querySelector(".totals");
   totals.textContent = `합계: ${sum}h`;
-  totals.classList.remove('ok', 'warn');
-  if (sum === 8) totals.classList.add('ok');
-  else if (sum === 0 || sum < 8) totals.classList.add('warn');
+  totals.classList.remove("ok", "warn");
+  if (sum === 8) totals.classList.add("ok");
+  else if (sum === 0 || sum < 8) totals.classList.add("warn");
 }
 
 async function saveDay(date) {
@@ -3724,66 +3786,74 @@ async function saveDay(date) {
   try {
     await apiPut(`/api/days/${date}`, { week_iso: currentWeek, entries });
   } catch (e) {
-    toast(`저장 실패: ${e.message}`, 'fail');
+    toast(`저장 실패: ${e.message}`, "fail");
   }
 }
 
 async function saveNote() {
   try {
     await apiPut(`/api/weeks/${currentWeek}/note`, {
-      body_md: document.getElementById('week-note').value,
+      body_md: document.getElementById("week-note").value,
     });
   } catch (e) {
-    toast(`메모 저장 실패: ${e.message}`, 'fail');
+    toast(`메모 저장 실패: ${e.message}`, "fail");
   }
 }
 
-document.getElementById('week-note').addEventListener(
-  'input', debounce(saveNote, 800)
-);
+document
+  .getElementById("week-note")
+  .addEventListener("input", debounce(saveNote, 800));
 
-document.getElementById('this-week').addEventListener('click', () => {
+document.getElementById("this-week").addEventListener("click", () => {
   currentWeek = isoWeek(new Date());
   loadWeek();
 });
-document.getElementById('prev-week').addEventListener('click', () => {
+document.getElementById("prev-week").addEventListener("click", () => {
   currentWeek = shiftWeek(currentWeek, -1);
   loadWeek();
 });
-document.getElementById('next-week').addEventListener('click', () => {
+document.getElementById("next-week").addEventListener("click", () => {
   currentWeek = shiftWeek(currentWeek, +1);
   loadWeek();
 });
 
 function shiftWeek(weekIso, delta) {
-  const [yearStr, wStr] = weekIso.split('-W');
+  const [yearStr, wStr] = weekIso.split("-W");
   const monday = new Date(Date.UTC(parseInt(yearStr, 10), 0, 4));
   const day = monday.getUTCDay() || 7;
-  monday.setUTCDate(monday.getUTCDate() - (day - 1) + (parseInt(wStr, 10) - 1 + delta) * 7);
+  monday.setUTCDate(
+    monday.getUTCDate() - (day - 1) + (parseInt(wStr, 10) - 1 + delta) * 7,
+  );
   return isoWeek(monday);
 }
 
-document.getElementById('btn-report').addEventListener('click', async () => {
-  const target = document.getElementById('target').value;
+document.getElementById("btn-report").addEventListener("click", async () => {
+  const target = document.getElementById("target").value;
   try {
-    const body = target === 'today'
-      ? { date: new Date().toISOString().slice(0, 10) }
-      : { week_iso: currentWeek };
-    const r = await apiPost('/api/actions/team-report', body);
+    const body =
+      target === "today"
+        ? { date: new Date().toISOString().slice(0, 10) }
+        : { week_iso: currentWeek };
+    const r = await apiPost("/api/actions/team-report", body);
     await navigator.clipboard.writeText(r.text);
-    toast('팀장 보고가 클립보드에 복사되었습니다');
+    toast("팀장 보고가 클립보드에 복사되었습니다");
   } catch (e) {
-    toast(`실패: ${e.message}`, 'fail');
+    toast(`실패: ${e.message}`, "fail");
   }
 });
 
-document.getElementById('btn-upnote').addEventListener('click', async () => {
+document.getElementById("btn-upnote").addEventListener("click", async () => {
   try {
-    if (!confirm(`이번 주(${currentWeek}) UpNote 노트를 생성합니다. 같은 주의 기존 노트는 자동 삭제되지 않습니다. 계속하시겠습니까?`)) return;
-    await apiPost('/api/actions/upnote-sync', { week_iso: currentWeek });
-    toast('UpNote 에 노트가 생성되었습니다');
+    if (
+      !confirm(
+        `이번 주(${currentWeek}) UpNote 노트를 생성합니다. 같은 주의 기존 노트는 자동 삭제되지 않습니다. 계속하시겠습니까?`,
+      )
+    )
+      return;
+    await apiPost("/api/actions/upnote-sync", { week_iso: currentWeek });
+    toast("UpNote 에 노트가 생성되었습니다");
   } catch (e) {
-    toast(`실패: ${e.message}`, 'fail');
+    toast(`실패: ${e.message}`, "fail");
   }
 });
 
@@ -3831,6 +3901,7 @@ git commit -m "feat: add main week-report page"
 ### Task 18: Static — Projects + Mappings page
 
 **Files:**
+
 - Create: `src/angeltime/static/projects.html`
 - Create: `src/angeltime/static/js/projects.js`
 
@@ -3841,44 +3912,58 @@ git commit -m "feat: add main week-report page"
 ```html
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <title>프로젝트 / 매핑 — angeltime</title>
-  <link rel="stylesheet" href="/static/css/main.css">
-</head>
-<body>
-  <header>
-    <nav>
-      <a href="/">📅 보고서</a>
-      <a href="/projects.html" class="active">🗂 프로젝트</a>
-      <a href="/logs.html">📋 로그</a>
-      <a href="/settings.html">⚙️ 설정</a>
-    </nav>
-  </header>
-  <main>
-    <section>
-      <h2>타임시트 프로젝트</h2>
-      <div>
-        <input id="new-project-name" type="text" placeholder="프로젝트 이름">
-        <input id="new-project-remote-id" type="text" placeholder="remote_id (선택)">
-        <button class="primary" id="add-project">추가</button>
-      </div>
-      <ul id="projects-list"></ul>
-    </section>
+  <head>
+    <meta charset="utf-8" />
+    <title>프로젝트 / 매핑 — angeltime</title>
+    <link rel="stylesheet" href="/static/css/main.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">📅 보고서</a>
+        <a href="/projects.html" class="active">🗂 프로젝트</a>
+        <a href="/logs.html">📋 로그</a>
+        <a href="/settings.html">⚙️ 설정</a>
+      </nav>
+    </header>
+    <main>
+      <section>
+        <h2>타임시트 프로젝트</h2>
+        <div>
+          <input
+            id="new-project-name"
+            type="text"
+            placeholder="프로젝트 이름"
+          />
+          <input
+            id="new-project-remote-id"
+            type="text"
+            placeholder="remote_id (선택)"
+          />
+          <button class="primary" id="add-project">추가</button>
+        </div>
+        <ul id="projects-list"></ul>
+      </section>
 
-    <section>
-      <h2>카테고리 매핑</h2>
-      <p class="muted">현재 보고서에 등장한 카테고리 → 타임시트 프로젝트 매핑.</p>
-      <table id="mappings-table">
-        <thead>
-          <tr><th>카테고리</th><th>타임시트 프로젝트</th><th>타임시트 제외</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
-  <script type="module" src="/static/js/projects.js"></script>
-</body>
+      <section>
+        <h2>카테고리 매핑</h2>
+        <p class="muted">
+          현재 보고서에 등장한 카테고리 → 타임시트 프로젝트 매핑.
+        </p>
+        <table id="mappings-table">
+          <thead>
+            <tr>
+              <th>카테고리</th>
+              <th>타임시트 프로젝트</th>
+              <th>타임시트 제외</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+    <script type="module" src="/static/js/projects.js"></script>
+  </body>
 </html>
 ```
 
@@ -3887,77 +3972,81 @@ git commit -m "feat: add main week-report page"
 `src/angeltime/static/js/projects.js`:
 
 ```javascript
-import { apiGet, apiPost, apiPut, toast } from './api.js';
+import { apiGet, apiPost, apiPut, toast } from "./api.js";
 
 async function loadProjects() {
-  const items = await apiGet('/api/projects');
-  const ul = document.getElementById('projects-list');
-  ul.innerHTML = '';
+  const items = await apiGet("/api/projects");
+  const ul = document.getElementById("projects-list");
+  ul.innerHTML = "";
   for (const p of items) {
-    const li = document.createElement('li');
-    li.textContent = p.name + (p.active ? '' : ' (비활성)');
+    const li = document.createElement("li");
+    li.textContent = p.name + (p.active ? "" : " (비활성)");
     ul.appendChild(li);
   }
   return items;
 }
 
 async function loadMappings(projects) {
-  const items = await apiGet('/api/mappings');
-  const tbody = document.querySelector('#mappings-table tbody');
-  tbody.innerHTML = '';
+  const items = await apiGet("/api/mappings");
+  const tbody = document.querySelector("#mappings-table tbody");
+  tbody.innerHTML = "";
   const opts = ['<option value="">(미매핑)</option>']
-    .concat(projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`))
-    .join('');
+    .concat(
+      projects.map(
+        (p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`,
+      ),
+    )
+    .join("");
   for (const m of items) {
-    const tr = document.createElement('tr');
+    const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(m.category)}</td>
       <td><select class="project-select">${opts}</select></td>
-      <td><input type="checkbox" class="excluded" ${m.excluded ? 'checked' : ''}></td>
+      <td><input type="checkbox" class="excluded" ${m.excluded ? "checked" : ""}></td>
     `;
-    const sel = tr.querySelector('.project-select');
+    const sel = tr.querySelector(".project-select");
     if (m.project_id) sel.value = String(m.project_id);
-    const exc = tr.querySelector('.excluded');
+    const exc = tr.querySelector(".excluded");
     const save = async () => {
       try {
-        await apiPut(
-          `/api/mappings/${encodeURIComponent(m.category)}`,
-          {
-            project_id: sel.value ? parseInt(sel.value, 10) : null,
-            excluded: exc.checked,
-          },
-        );
-        toast('매핑 저장됨');
+        await apiPut(`/api/mappings/${encodeURIComponent(m.category)}`, {
+          project_id: sel.value ? parseInt(sel.value, 10) : null,
+          excluded: exc.checked,
+        });
+        toast("매핑 저장됨");
       } catch (e) {
-        toast(`실패: ${e.message}`, 'fail');
+        toast(`실패: ${e.message}`, "fail");
       }
     };
-    sel.addEventListener('change', save);
-    exc.addEventListener('change', save);
+    sel.addEventListener("change", save);
+    exc.addEventListener("change", save);
     tbody.appendChild(tr);
   }
 }
 
 function escapeHtml(s) {
-  return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
-document.getElementById('add-project').addEventListener('click', async () => {
-  const nameInput = document.getElementById('new-project-name');
-  const remoteInput = document.getElementById('new-project-remote-id');
+document.getElementById("add-project").addEventListener("click", async () => {
+  const nameInput = document.getElementById("new-project-name");
+  const remoteInput = document.getElementById("new-project-remote-id");
   const name = nameInput.value.trim();
   const remote_id = remoteInput.value.trim() || null;
   if (!name) return;
   try {
-    await apiPost('/api/projects', { name, remote_id });
-    nameInput.value = '';
-    remoteInput.value = '';
+    await apiPost("/api/projects", { name, remote_id });
+    nameInput.value = "";
+    remoteInput.value = "";
     const ps = await loadProjects();
     await loadMappings(ps);
     toast(`프로젝트 추가됨: ${name}`);
   } catch (e) {
-    toast(`실패: ${e.message}`, 'fail');
+    toast(`실패: ${e.message}`, "fail");
   }
 });
 
@@ -3979,6 +4068,7 @@ git commit -m "feat: add projects/mappings management page"
 ### Task 19: Static — Settings page (템플릿 편집)
 
 **Files:**
+
 - Create: `src/angeltime/static/settings.html`
 - Create: `src/angeltime/static/js/settings.js`
 
@@ -3989,64 +4079,72 @@ git commit -m "feat: add projects/mappings management page"
 ```html
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <title>설정 — angeltime</title>
-  <link rel="stylesheet" href="/static/css/main.css">
-</head>
-<body>
-  <header>
-    <nav>
-      <a href="/">📅 보고서</a>
-      <a href="/projects.html">🗂 프로젝트</a>
-      <a href="/logs.html">📋 로그</a>
-      <a href="/settings.html" class="active">⚙️ 설정</a>
-    </nav>
-  </header>
-  <main>
-    <section>
-      <h2>UpNote</h2>
-      <label>노트북 UUID
-        <input id="notebook-id" type="text" placeholder="0889cff8-...">
-      </label>
-      <p class="muted">UpNote 사이드바에서 노트북 우클릭 → 링크 복사 → URL 의 notebookId 값.</p>
-    </section>
+  <head>
+    <meta charset="utf-8" />
+    <title>설정 — angeltime</title>
+    <link rel="stylesheet" href="/static/css/main.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">📅 보고서</a>
+        <a href="/projects.html">🗂 프로젝트</a>
+        <a href="/logs.html">📋 로그</a>
+        <a href="/settings.html" class="active">⚙️ 설정</a>
+      </nav>
+    </header>
+    <main>
+      <section>
+        <h2>UpNote</h2>
+        <label
+          >노트북 UUID
+          <input id="notebook-id" type="text" placeholder="0889cff8-..." />
+        </label>
+        <p class="muted">
+          UpNote 사이드바에서 노트북 우클릭 → 링크 복사 → URL 의 notebookId 값.
+        </p>
+      </section>
 
-    <section>
-      <h2>출력 템플릿</h2>
-      <p class="muted">Jinja2 문법. <code>{{ entry.category }}</code>, <code>{{ entry.body }}</code>, <code>{{ yy }}</code>, <code>{{ ww }}</code>, <code>{{ days }}</code>, <code>{{ week_notes }}</code> 등.</p>
+      <section>
+        <h2>출력 템플릿</h2>
+        <p class="muted">
+          Jinja2 문법. <code>{{ entry.category }}</code>,
+          <code>{{ entry.body }}</code>, <code>{{ yy }}</code>,
+          <code>{{ ww }}</code>, <code>{{ days }}</code>,
+          <code>{{ week_notes }}</code> 등.
+        </p>
 
-      <h3>팀장 보고</h3>
-      <textarea id="t-team-report" rows="10"></textarea>
-      <div>
-        <button data-preview="team_report">미리보기</button>
-        <button data-reset="team_report.template">기본값 복원</button>
-      </div>
-      <pre id="preview-team-report" class="muted"></pre>
+        <h3>팀장 보고</h3>
+        <textarea id="t-team-report" rows="10"></textarea>
+        <div>
+          <button data-preview="team_report">미리보기</button>
+          <button data-reset="team_report.template">기본값 복원</button>
+        </div>
+        <pre id="preview-team-report" class="muted"></pre>
 
-      <h3>UpNote 제목</h3>
-      <textarea id="t-upnote-title" rows="2"></textarea>
-      <div>
-        <button data-preview="upnote_title">미리보기</button>
-        <button data-reset="upnote.title_template">기본값 복원</button>
-      </div>
-      <pre id="preview-upnote-title" class="muted"></pre>
+        <h3>UpNote 제목</h3>
+        <textarea id="t-upnote-title" rows="2"></textarea>
+        <div>
+          <button data-preview="upnote_title">미리보기</button>
+          <button data-reset="upnote.title_template">기본값 복원</button>
+        </div>
+        <pre id="preview-upnote-title" class="muted"></pre>
 
-      <h3>UpNote 본문</h3>
-      <textarea id="t-upnote-body" rows="20"></textarea>
-      <div>
-        <button data-preview="upnote_body">미리보기</button>
-        <button data-reset="upnote.body_template">기본값 복원</button>
-      </div>
-      <pre id="preview-upnote-body" class="muted"></pre>
-    </section>
+        <h3>UpNote 본문</h3>
+        <textarea id="t-upnote-body" rows="20"></textarea>
+        <div>
+          <button data-preview="upnote_body">미리보기</button>
+          <button data-reset="upnote.body_template">기본값 복원</button>
+        </div>
+        <pre id="preview-upnote-body" class="muted"></pre>
+      </section>
 
-    <section class="actions-bar">
-      <button class="primary" id="save">저장</button>
-    </section>
-  </main>
-  <script type="module" src="/static/js/settings.js"></script>
-</body>
+      <section class="actions-bar">
+        <button class="primary" id="save">저장</button>
+      </section>
+    </main>
+    <script type="module" src="/static/js/settings.js"></script>
+  </body>
 </html>
 ```
 
@@ -4125,6 +4223,7 @@ load();
 - [ ] **Step 3: 수동 확인**
 
 브라우저에서 `/settings.html` 접속 후:
+
 - 4개 입력란이 기본값으로 채워짐
 - 팀장 보고 미리보기 클릭 → 현재 주 데이터로 렌더 결과 표시
 - 잘못된 Jinja2 (예: `{% bogus %}`) 입력 후 저장 → 에러 토스트
@@ -4142,6 +4241,7 @@ git commit -m "feat: add settings page with template editing and preview"
 ### Task 20: Static — Logs page + cleanup on startup
 
 **Files:**
+
 - Create: `src/angeltime/static/logs.html`
 - Create: `src/angeltime/static/js/logs.js`
 - Modify: `src/angeltime/server.py` (lifespan 에 cleanup 호출 추가)
@@ -4151,53 +4251,57 @@ git commit -m "feat: add settings page with template editing and preview"
 ```html
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <title>로그 — angeltime</title>
-  <link rel="stylesheet" href="/static/css/main.css">
-</head>
-<body>
-  <header>
-    <nav>
-      <a href="/">📅 보고서</a>
-      <a href="/projects.html">🗂 프로젝트</a>
-      <a href="/logs.html" class="active">📋 로그</a>
-      <a href="/settings.html">⚙️ 설정</a>
-    </nav>
-  </header>
-  <main>
-    <h2>최근 동작 로그 (90일)</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>시각</th><th>종류</th><th>대상</th><th>상태</th><th>메시지</th>
-        </tr>
-      </thead>
-      <tbody id="logs-tbody"></tbody>
-    </table>
-  </main>
-  <script type="module" src="/static/js/logs.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>로그 — angeltime</title>
+    <link rel="stylesheet" href="/static/css/main.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">📅 보고서</a>
+        <a href="/projects.html">🗂 프로젝트</a>
+        <a href="/logs.html" class="active">📋 로그</a>
+        <a href="/settings.html">⚙️ 설정</a>
+      </nav>
+    </header>
+    <main>
+      <h2>최근 동작 로그 (90일)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>시각</th>
+            <th>종류</th>
+            <th>대상</th>
+            <th>상태</th>
+            <th>메시지</th>
+          </tr>
+        </thead>
+        <tbody id="logs-tbody"></tbody>
+      </table>
+    </main>
+    <script type="module" src="/static/js/logs.js"></script>
+  </body>
 </html>
 ```
 
 - [ ] **Step 2: logs.js 작성**
 
 ```javascript
-import { apiGet } from './api.js';
+import { apiGet } from "./api.js";
 
 async function load() {
-  const items = await apiGet('/api/logs');
-  const tbody = document.getElementById('logs-tbody');
-  tbody.innerHTML = '';
+  const items = await apiGet("/api/logs");
+  const tbody = document.getElementById("logs-tbody");
+  tbody.innerHTML = "";
   for (const log of items) {
-    const tr = document.createElement('tr');
+    const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${log.created_at}</td>
       <td>${log.action_type}</td>
       <td>${log.target_range}</td>
-      <td>${log.status === 'ok' ? '✓' : '✗'}</td>
-      <td>${log.message ?? ''}</td>
+      <td>${log.status === "ok" ? "✓" : "✗"}</td>
+      <td>${log.message ?? ""}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -4233,6 +4337,7 @@ git commit -m "feat: add logs page and startup cleanup"
 ### Task 21: 타임시트 jobtime API DevTools 캡처 (사용자 수동 작업)
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-05-12-angeltime-design.md` (부록 추가)
 
 이 task 는 코드 작성이 아니라 **사용자가 직접 수행하는 수동 작업** 이다. 결과를 spec 문서에 부록으로 기록한 뒤 Task 22 로 진행한다.
@@ -4254,6 +4359,7 @@ ANGELNET_USER / 패스워드로 로그인.
 (b) **저장(submit) 호출**: 폼에 1회 정상 입력 후 "저장" 클릭. 발생하는 XHR/Fetch 요청.
 
 각 호출에 대해 다음을 메모:
+
 - Request URL
 - Method
 - Request Headers (특히 `Content-Type`, `X-Requested-With`)
@@ -4264,7 +4370,7 @@ ANGELNET_USER / 패스워드로 로그인.
 
 `docs/superpowers/specs/2026-05-12-angeltime-design.md` 끝에 추가:
 
-```markdown
+````markdown
 ## 부록 A: Timesheet jobtime API 캡처 (2026-05-XX 수행)
 
 ### A.1 프로젝트 목록 조회
@@ -4275,8 +4381,9 @@ ANGELNET_USER / 패스워드로 로그인.
 - Payload: ...
 - Response 예시:
   ```json
-  [{"projectId": "...", "projectName": "..."}]
+  [{ "projectId": "...", "projectName": "..." }]
   ```
+````
 
 ### A.2 jobtime 저장
 
@@ -4294,14 +4401,15 @@ ANGELNET_USER / 패스워드로 로그인.
   ```
 - Response 성공 시: `{"success": true, ...}`
 - Response 실패 시: 4xx/5xx 또는 `{"success": false, "message": "..."}`
-```
+
+````
 
 - [ ] **Step 5: Commit spec 갱신**
 
 ```bash
 git add docs/superpowers/specs/2026-05-12-angeltime-design.md
 git commit -m "docs: capture jobtime API endpoints from DevTools"
-```
+````
 
 ---
 
@@ -4315,6 +4423,7 @@ Task 21 에서 발견한 실제 API 구조를 client 에 반영. 핵심:
 자세한 페이로드 명세는 spec 부록 A 참조.
 
 **Files:**
+
 - Modify: `src/angeltime/client.py`
 - Modify: `tests/test_client.py`
 
@@ -4564,6 +4673,7 @@ git commit -m "feat: add jobtime search/save API based on real capture"
 7. `client.submit_jobtimes(rows)` 한 번 호출로 일괄 저장
 
 **Files:**
+
 - Modify: `src/angeltime/server.py`
 - Modify: `tests/test_server.py`
 - Modify: `src/angeltime/static/js/main.js`
@@ -4884,29 +4994,36 @@ def test_timesheet_week_range_aggregates_months(api, mock_client):
 `src/angeltime/static/js/main.js` 에 핸들러 추가:
 
 ```javascript
-document.getElementById('btn-timesheet').addEventListener('click', async () => {
-  const target = document.getElementById('target').value;
-  const body = target === 'today'
-    ? { date: new Date().toISOString().slice(0, 10), dry_run: true }
-    : { week_iso: currentWeek, dry_run: true };
+document.getElementById("btn-timesheet").addEventListener("click", async () => {
+  const target = document.getElementById("target").value;
+  const body =
+    target === "today"
+      ? { date: new Date().toISOString().slice(0, 10), dry_run: true }
+      : { week_iso: currentWeek, dry_run: true };
   try {
-    const preview = await apiPost('/api/actions/timesheet-submit', body);
-    const summary = preview.items.map(
-      (it) => `${it.date} [${it.status}] ${it.category} ${it.hours}h`
-        + (it.project_name ? ` → ${it.project_name}` : '')
-        + (it.task_name ? ` (task: ${it.task_name})` : ''),
-    ).join('\n');
+    const preview = await apiPost("/api/actions/timesheet-submit", body);
+    const summary = preview.items
+      .map(
+        (it) =>
+          `${it.date} [${it.status}] ${it.category} ${it.hours}h` +
+          (it.project_name ? ` → ${it.project_name}` : "") +
+          (it.task_name ? ` (task: ${it.task_name})` : ""),
+      )
+      .join("\n");
     if (preview.missing && preview.missing.length) {
-      toast(`매핑 누락: ${preview.missing.join(', ')}`, 'fail');
-      console.warn('preview:', preview);
+      toast(`매핑 누락: ${preview.missing.join(", ")}`, "fail");
+      console.warn("preview:", preview);
       return;
     }
-    if (!confirm(`다음 항목을 타임시트에 입력합니다:\n\n${summary}\n\n계속?`)) return;
-    const real = await apiPost('/api/actions/timesheet-submit',
-      { ...body, dry_run: false });
+    if (!confirm(`다음 항목을 타임시트에 입력합니다:\n\n${summary}\n\n계속?`))
+      return;
+    const real = await apiPost("/api/actions/timesheet-submit", {
+      ...body,
+      dry_run: false,
+    });
     toast(`타임시트 입력 완료 (${(real.results || []).length}건)`);
   } catch (e) {
-    toast(`실패: ${e.message}`, 'fail');
+    toast(`실패: ${e.message}`, "fail");
   }
 });
 ```
@@ -4930,13 +5047,14 @@ git commit -m "feat: add timesheet-submit action and UI flow"
 
 ## Phase 8: Launcher + 종합 검증 (Tasks 24-25)
 
-### Task 24: `time` launcher + __main__.py
+### Task 24: `time` launcher + **main**.py
 
 **Files:**
+
 - Create: `src/angeltime/__main__.py`
 - Create: `time` (실행 권한)
 
-- [ ] **Step 1: __main__.py 작성**
+- [ ] **Step 1: **main**.py 작성**
 
 `src/angeltime/__main__.py`:
 
@@ -5101,6 +5219,7 @@ git commit -m "feat: add CLI entry point and ./time launcher"
 ### Task 25: 수동 검증 + 최종 정리
 
 **Files:**
+
 - (수정 없음. 검증만)
 
 - [ ] **Step 1: 전체 테스트 실행**
@@ -5174,22 +5293,22 @@ git log --oneline | head
 
 스펙 커버리지 매핑:
 
-| Spec 섹션 | 구현 Task |
-|---|---|
-| 4 아키텍처 | Task 10 (server skeleton), 17 (frontend) |
-| 5 데이터 모델 | Task 5 (db.py) |
-| 6.1 입력 모델 | Task 4 (models), 11 (CRUD) |
-| 6.2 팀장 보고 (템플릿) | Task 6 (templates), 7 (formatter), 14 (action) |
-| 6.3 UpNote 출력 (템플릿) | Task 6, 7, 15 (action) |
-| 6.4 출력 템플릿 시스템 | Task 7 (sandbox), 13 (settings preview), 19 (settings UI) |
-| 7.1 Timesheet REST | Task 9 (login), 21 (캡처), 22 (jobtime methods), 23 (action) |
-| 7.2 UpNote x-callback-url | Task 8 (adapter) |
-| 7.3 팀장 보고 클립보드 | Task 14 (action), 17 (clipboard JS) |
-| 8 UI | Task 17, 18, 19, 20 |
-| 9 디렉토리 구조 | Task 1 |
-| 10 보안 | Task 3 (Keychain), 9 (verify=False, secret 미로그), 24 (HOST=127.0.0.1) |
-| 11 에러 처리 | Task 2 (예외 계층) |
-| 12 테스트 전략 | 각 Phase 의 TDD |
-| 13 검증 체크리스트 | Task 25 |
-| 14 단계적 구현 순서 | 본 plan 전체 |
-| 15 angelnet 통합 경로 | Task 3 (KEYCHAIN_SERVICE 공유), 9 (코드 패턴 일치) |
+| Spec 섹션                 | 구현 Task                                                               |
+| ------------------------- | ----------------------------------------------------------------------- |
+| 4 아키텍처                | Task 10 (server skeleton), 17 (frontend)                                |
+| 5 데이터 모델             | Task 5 (db.py)                                                          |
+| 6.1 입력 모델             | Task 4 (models), 11 (CRUD)                                              |
+| 6.2 팀장 보고 (템플릿)    | Task 6 (templates), 7 (formatter), 14 (action)                          |
+| 6.3 UpNote 출력 (템플릿)  | Task 6, 7, 15 (action)                                                  |
+| 6.4 출력 템플릿 시스템    | Task 7 (sandbox), 13 (settings preview), 19 (settings UI)               |
+| 7.1 Timesheet REST        | Task 9 (login), 21 (캡처), 22 (jobtime methods), 23 (action)            |
+| 7.2 UpNote x-callback-url | Task 8 (adapter)                                                        |
+| 7.3 팀장 보고 클립보드    | Task 14 (action), 17 (clipboard JS)                                     |
+| 8 UI                      | Task 17, 18, 19, 20                                                     |
+| 9 디렉토리 구조           | Task 1                                                                  |
+| 10 보안                   | Task 3 (Keychain), 9 (verify=False, secret 미로그), 24 (HOST=127.0.0.1) |
+| 11 에러 처리              | Task 2 (예외 계층)                                                      |
+| 12 테스트 전략            | 각 Phase 의 TDD                                                         |
+| 13 검증 체크리스트        | Task 25                                                                 |
+| 14 단계적 구현 순서       | 본 plan 전체                                                            |
+| 15 angelnet 통합 경로     | Task 3 (KEYCHAIN_SERVICE 공유), 9 (코드 패턴 일치)                      |
