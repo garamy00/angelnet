@@ -14,10 +14,13 @@ from angeldash.timesheet.models import (
 )
 
 
-def test_entry_input_accepts_positive_hours():
-    """시간은 0 이상 24 미만의 실수를 허용한다."""
-    e = EntryInput(category="X", hours=4.5, body_md="- 어쩌고")
-    assert e.hours == 4.5
+def test_entry_input_rounds_hours_half_up():
+    """시간은 1시간 단위로 자동 반올림된다 (half-up)."""
+    assert EntryInput(category="X", hours=1.4, body_md="").hours == 1
+    assert EntryInput(category="X", hours=1.5, body_md="").hours == 2
+    assert EntryInput(category="X", hours=4.5, body_md="").hours == 5
+    assert EntryInput(category="X", hours=0.4, body_md="").hours == 0
+    assert EntryInput(category="X", hours=8, body_md="").hours == 8
 
 
 def test_entry_input_rejects_negative_hours():

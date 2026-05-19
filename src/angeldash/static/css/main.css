@@ -31,6 +31,7 @@
   --color-success: #15803d;
   --color-warn: #ca8a04;
   --color-danger: #b91c1c;
+  --color-shortday: #8b5cf6;        /* 가정의날 등 회사 단축일 (보라) */
   --color-toast-ok: #15803d;        /* style.css 호환 */
   --color-toast-err: #b91c1c;       /* style.css 호환 */
 
@@ -170,6 +171,9 @@ code {
 .day-block--holiday {
   border-left-color: var(--color-danger);
 }
+.day-block--shortday {
+  border-left-color: var(--color-shortday);
+}
 
 .day-header {
   display: flex;
@@ -274,6 +278,9 @@ code {
 
 .day-block--holiday {
   background: rgba(185, 28, 28, 0.08);
+}
+.day-block--shortday {
+  background: rgba(139, 92, 246, 0.08);
 }
 
 /* ─── 동기화 뱃지 ─────────────────────────────── */
@@ -1188,4 +1195,49 @@ main.settings-form {
 .weekly-table .row-vacation .cell-project {
   color: var(--color-muted);
   font-style: italic;
+}
+
+/* 본문 작성형식 도움말 (기능1) */
+.format-help {
+  margin: 8px 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+.format-help summary {
+  cursor: pointer;
+}
+.format-help pre {
+  margin: 6px 0;
+  padding: 8px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre;
+}
+
+/* 하루 전체 팀장보고 미리보기 (기능3) */
+.day-preview {
+  margin: 4px 0 0;
+  padding: 8px;
+  background: var(--color-surface-2);
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+  color: var(--color-muted);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+/* 가정의날 단축일 행 (기능2) */
+.shortday-row {
+  padding: 4px 8px;
+  color: var(--color-shortday);
+}
+.shortday-grid-row .task-col {
+  color: var(--color-shortday);
+}
+.shortday-cell {
+  color: var(--color-shortday);
+  font-weight: 700;
+  background: rgba(139, 92, 246, 0.18);
 }

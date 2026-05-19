@@ -8,6 +8,8 @@ User 는 angeldash._common.models 의 것을 공유 (회의실 모듈과 동일)
 
 from __future__ import annotations
 
+import math
+
 from pydantic import BaseModel, Field, field_validator
 
 # 회의실 서브패키지와 같은 User 타입 사용 → 외부에서 `from .models import User` 호환
@@ -20,6 +22,13 @@ class EntryInput(BaseModel):
     category: str = Field(min_length=1)
     hours: float = Field(ge=0, lt=24)
     body_md: str = ""
+
+    @field_validator("hours", mode="before")
+    @classmethod
+    def round_hours_to_hour(cls, v: object) -> int:
+        # 일일업무시간·타임시트는 1시간 단위 강제. half-up 반올림 (hours >= 0).
+        f = float(v)  # type: ignore[arg-type]
+        return math.floor(f + 0.5)
 
     @field_validator("category")
     @classmethod

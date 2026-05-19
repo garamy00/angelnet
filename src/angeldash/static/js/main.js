@@ -10,6 +10,35 @@ import { loadWeekSidebar, highlightCurrent } from './week_sidebar.js';
 let currentWeek = isoWeek(new Date());
 let currentData = { days: [], note: '', vacations: [], holidays: [] };
 
+// 최근 카테고리를 datalist 에 채워 카테고리 input 자동완성에 사용 (항목2).
+async function refreshCategorySuggestions() {
+  try {
+    const cats = await apiGet('/api/categories/recent?days=14');
+    const dl = document.getElementById('category-suggestions');
+    if (!dl) return;
+    dl.innerHTML = cats.map(
+      (c) => `<option value="${c.replace(/"/g, '&quot;')}"></option>`,
+    ).join('');
+  } catch (e) {
+    console.error('category suggestions fetch failed', e);
+  }
+}
+
+// 사이드바 (저장된 일일업무보고 목록) 재로드 — 저장/네비게이션 후 호출 (항목1).
+function reloadWeekSidebar() {
+  loadWeekSidebar({
+    indexUrl: '/api/weeks/index',
+    currentWeek,
+    navigate: navigateToWeek,
+  });
+}
+
+function navigateToWeek(weekIso) {
+  currentWeek = weekIso;
+  loadWeek();
+  highlightCurrent(weekIso);
+}
+
 async function loadWeek() {
   const months = monthsForWeek(currentWeek);
   // 휴가/공휴일은 월별 호출. 한 주가 두 달에 걸치면 둘 다 fetch.
@@ -85,7 +114,10 @@ function updateExcelButtonLabel() {
 function renderDay(day, vacations, holiday) {
   const wrap = document.createElement('div');
   wrap.className = 'day-block';
-  if (holiday) wrap.classList.add('day-block--holiday');
+  // 가정의날 = 1h 단축일. full-holiday 가 아니라 정상 근무일로 두고 마커만 표시.
+  const isShortDay = !!holiday && holiday.label === '가정의날';
+  if (holiday && !isShortDay) wrap.classList.add('day-block--holiday');
+  if (isShortDay) wrap.classList.add('day-block--shortday');
   wrap.dataset.date = day.date;
   // 좌측 stripe 색상 결정용 — CSS 가 [data-weekday], [data-has-vacation] 셀렉터 사용
   wrap.dataset.weekday = String(new Date(day.date + 'T00:00:00').getDay());
@@ -99,7 +131,7 @@ function renderDay(day, vacations, holiday) {
   const vacLabel = vacations.length
     ? ` <span class="vacation-tag">🏖 휴가 ${totalVacHours}h</span>`
     : '';
-  const holLabel = holiday
+  const holLabel = (holiday && !isShortDay)
     ? ` <span class="holiday-tag">🎌 ${escapeHtml(holiday.label)}</span>`
     : '';
   header.innerHTML = `<span>${formatDateLabel(day.date)}${holLabel}${vacLabel}</span>`;
@@ -116,6 +148,14 @@ function renderDay(day, vacations, holiday) {
     wrap.appendChild(row);
   }
 
+  // 가정의날 1h — 표시 전용 (하루 합계 미반영)
+  if (isShortDay) {
+    const sd = document.createElement('div');
+    sd.className = 'shortday-row';
+    sd.innerHTML = `🎌 <strong>가정의날</strong> 1h <span class="muted">(회사 단축일)</span>`;
+    wrap.appendChild(sd);
+  }
+
   for (const entry of day.entries) {
     wrap.appendChild(renderEntry(entry));
   }
@@ -127,6 +167,50 @@ function renderDay(day, vacations, holiday) {
     saveDay(day.date);
   });
   wrap.appendChild(addBtn);
+
+  // 하루 전체 팀장보고 미리보기 — 기본 템플릿(`*) {카테고리}` + 본문,
+  // 엔트리 사이 빈 줄) 근사. 빈 카테고리 행은 collectEntries 와 동일하게 제외.
+  const dayPreviewBtn = document.createElement('button');
+  dayPreviewBtn.type = 'button';
+  dayPreviewBtn.className = 'day-preview-toggle';
+  dayPreviewBtn.textContent = '📋 하루 미리보기';
+  const dayPreviewPre = document.createElement('pre');
+  dayPreviewPre.className = 'day-preview';
+  dayPreviewPre.hidden = true;
+  // db.SOURCE_COMMIT_LABELS 미러 — 미리보기를 위한 클라이언트 근사.
+  const SC_LABELS = {
+    done: '완료', later: '추후', local_backup: '로컬백업', none: '없음',
+  };
+  const renderDayPreview = () => {
+    const parts = [];
+    for (const row of wrap.querySelectorAll('.entry')) {
+      const cat = row.querySelector('.category').value.trim();
+      if (!cat) continue;
+      const bodyVal = row.querySelector('.entry-body').value;
+      parts.push(`*) ${cat}${bodyVal ? '\n' + bodyVal : ''}`);
+    }
+    // 소스 Commit — 팀장보고 템플릿상 항상 출력 (모든 값이 비어있지 않은 라벨)
+    const scInput = wrap.querySelector(
+      '.day-meta input[type="radio"]:checked',
+    );
+    parts.push(`*) 소스 Commit\n - ${SC_LABELS[scInput?.value] || '없음'}`);
+    // 기타 — misc_note 가 trailing 공백 제거 후 비어있지 않을 때만
+    const miscEl = wrap.querySelector('.day-meta .meta-misc');
+    const misc = (miscEl?.value || '').replace(/\s+$/, '');
+    if (misc) parts.push(`*) 기타\n - ${misc}`);
+
+    dayPreviewPre.textContent = parts.join('\n\n');
+  };
+  dayPreviewBtn.addEventListener('click', () => {
+    dayPreviewPre.hidden = !dayPreviewPre.hidden;
+    if (!dayPreviewPre.hidden) renderDayPreview();
+  });
+  // 미리보기가 열려 있으면 엔트리 입력 변경을 실시간 반영 (이벤트 위임)
+  wrap.addEventListener('input', () => {
+    if (!dayPreviewPre.hidden) renderDayPreview();
+  });
+  wrap.appendChild(dayPreviewBtn);
+  wrap.appendChild(dayPreviewPre);
 
   // 소스 Commit 라디오 + 기타 textarea
   const metaSection = document.createElement('div');
@@ -206,14 +290,15 @@ function renderEntry(entry) {
   row.className = 'entry';
   row.innerHTML = `
     <div class="entry-header">
-      <input class="category" type="text" placeholder="카테고리"
+      <input class="category" type="text" list="category-suggestions"
+             placeholder="카테고리" autocomplete="off"
              value="${escapeHtml(entry.category)}">
-      <input class="hours" type="number" min="0" max="24" step="0.5"
+      <input class="hours" type="number" min="0" max="24" step="1"
              value="${entry.hours}">
       <span>h</span>
       <button class="remove">×</button>
     </div>
-    <textarea class="entry-body" placeholder="본문 (markdown)">${escapeHtml(entry.body_md)}</textarea>
+    <textarea class="entry-body" placeholder=" - 작업 항목&#10;   . 세부 내용&#10;     -> 결과">${escapeHtml(entry.body_md)}</textarea>
   `;
   const debounced = debounce(() => {
     const d = row.closest('.day-block')?.dataset.date;
@@ -251,7 +336,7 @@ function collectEntries(block) {
     if (!category) continue;
     out.push({
       category,
-      hours: parseFloat(row.querySelector('.hours').value || '0'),
+      hours: Math.round(parseFloat(row.querySelector('.hours').value || '0')),
       body_md: row.querySelector('.entry-body').value,
     });
   }
@@ -278,6 +363,9 @@ async function saveDay(date) {
   const entries = collectEntries(block);
   try {
     await apiPut(`/api/days/${date}`, { week_iso: currentWeek, entries });
+    // 저장 직후 사이드바·카테고리 자동완성 갱신 (새 주차/카테고리 즉시 반영)
+    reloadWeekSidebar();
+    refreshCategorySuggestions();
   } catch (e) {
     toast(`저장 실패: ${e.message}`, 'fail');
   }
@@ -673,6 +761,26 @@ function renderMonthlyGrid(data) {
       tbody += '</tr>';
     }
   }
+
+  // 가정의날 1h — 표시 전용 행 (휴일 색칠/합계 미반영)
+  const shortdays = data.shortdays || [];
+  if (shortdays.length) {
+    const sdByDay = new Map(shortdays.map((s) => [s.day, s.hours]));
+    let sdTotal = 0;
+    tbody += '<tr class="shortday-grid-row">';
+    tbody += '<td class="task-col" title="회사 단축일">🎌 가정의날 (단축일)</td>';
+    for (let d = 1; d <= dim; d += 1) {
+      const h = sdByDay.get(d) || 0;
+      sdTotal += h;
+      if (h) {
+        tbody += `<td class="cell shortday-cell" title="${d}일: 가정의날 ${h}h">${h}</td>`;
+      } else {
+        tbody += '<td class="cell"></td>';
+      }
+    }
+    tbody += `<td class="total-col"><b>${sdTotal}</b></td>`;
+    tbody += '</tr>';
+  }
   tbody += '</tbody>';
 
   // 합계 행
@@ -712,12 +820,5 @@ document.getElementById('btn-monthly-preview').addEventListener('click', async (
 
 initHeader();
 initOngoingSchedule();
-loadWeekSidebar({
-  indexUrl: '/api/weeks/index',
-  currentWeek,
-  navigate: (weekIso) => {
-    currentWeek = weekIso;
-    loadWeek();
-    highlightCurrent(weekIso);
-  },
-});
+refreshCategorySuggestions();
+reloadWeekSidebar();

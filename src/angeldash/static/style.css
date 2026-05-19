@@ -139,7 +139,11 @@
 }
 
 /* 모달 */
-.modal-backdrop {
+/* 회의실 모달 — main.css 의 .modal / .modal-backdrop 룰과 마크업 구조가
+   달라(거기: .modal 이 전체화면 fixed overlay) id specificity 로 분리한다.
+   #modal-root 스코프가 없으면 main.css 의 .modal{position:fixed;inset:0}
+   가 이 패널에 적용되어 예약창이 화면 전체를 덮는다. */
+#modal-root .modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.4);
@@ -149,7 +153,11 @@
   z-index: 100;
 }
 
-.modal {
+#modal-root .modal {
+  position: relative;
+  inset: auto;
+  display: block;
+  z-index: auto;
   background: var(--color-panel);
   color: var(--color-fg);
   border-radius: 8px;
@@ -159,10 +167,10 @@
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
-.modal h3 { margin: 0 0 14px; font-size: 16px; }
-.modal .form-row { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
-.modal label { font-size: 12px; color: var(--color-fg-mute); }
-.modal input, .modal select, .modal textarea {
+#modal-root .modal h3 { margin: 0 0 14px; font-size: 16px; }
+#modal-root .modal .form-row { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
+#modal-root .modal label { font-size: 12px; color: var(--color-fg-mute); }
+#modal-root .modal input, #modal-root .modal select, #modal-root .modal textarea {
   padding: 6px 8px;
   border: 1px solid var(--color-border);
   border-radius: 4px;
@@ -170,13 +178,13 @@
   background: var(--color-panel-2);
   color: var(--color-fg);
 }
-.modal .actions {
+#modal-root .modal .actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
 }
-.modal button {
+#modal-root .modal button {
   padding: 6px 14px;
   border: 1px solid var(--color-border);
   background: var(--color-panel-2);
@@ -184,9 +192,9 @@
   border-radius: 4px;
   cursor: pointer;
 }
-.modal button:hover { background: var(--color-empty-hover); }
-.modal button.primary { background: var(--color-mine); color: #fff; border-color: var(--color-mine); }
-.modal button.danger  { background: var(--color-toast-err); color: #fff; border-color: var(--color-toast-err); }
+#modal-root .modal button:hover { background: var(--color-empty-hover); }
+#modal-root .modal button.primary { background: var(--color-mine); color: #fff; border-color: var(--color-mine); }
+#modal-root .modal button.danger  { background: var(--color-toast-err); color: #fff; border-color: var(--color-toast-err); }
 
 /* 숫자 입력 스테퍼 — native spin button 이 너무 작아 36×36 큰 +/− 버튼으로 대체 */
 .stepper { display: flex; align-items: stretch; gap: 0; }

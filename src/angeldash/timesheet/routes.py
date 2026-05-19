@@ -190,6 +190,29 @@ def register_routes(app: FastAPI) -> None:
         days = db_module.get_week(conn, week_iso)
         return {"week_iso": week_iso, "days": days}
 
+    @app.get("/api/categories/recent")
+    async def list_recent_categories(
+        days: int = 14,
+        conn=Depends(get_conn),
+    ) -> list[str]:
+        """최근 N일간 사용한 distinct 카테고리 — 최근 사용 순.
+
+        카테고리 입력 자동완성용. datalist 로 노출되어 사용자가 자유 입력
+        가능하면서 동시에 최근 항목을 빠르게 선택 가능.
+        """
+        import datetime as _dt
+
+        cutoff = (_dt.date.today() - _dt.timedelta(days=days)).isoformat()
+        rows = conn.execute(
+            "SELECT category, MAX(date) AS last_date "
+            "FROM entries "
+            "WHERE date >= ? AND TRIM(category) != '' "
+            "GROUP BY category "
+            "ORDER BY last_date DESC, category",
+            (cutoff,),
+        ).fetchall()
+        return [r["category"] for r in rows]
+
     @app.get("/api/days/{date}")
     async def get_day_route(date: str, conn=Depends(get_conn)) -> dict:
         return db_module.get_day(conn, date)
@@ -848,17 +871,27 @@ def register_routes(app: FastAPI) -> None:
         }
 
         # 진짜 공휴일 일자 list (출근일 제외)
+        # 가정의날 = 회사 1시간 단축일. full-holiday/exclude 와 별개로
+        # 표시 전용 shortday 로 분리한다 (합계 미반영, exclude 설정 무관).
+        shortday_label = "가정의날"
+        shortday_hours = 1
         holidays_out: list[dict] = []
+        shortdays_out: list[dict] = []
         for h in holidays_raw:
             label = (h.get("label") or "").strip()
-            if label in exclude_labels:
-                continue
             date_iso = h.get("date") or ""
             try:
                 d = _dt.date.fromisoformat(date_iso)
             except ValueError:
                 continue
             if d.year != year or d.month != month:
+                continue
+            if label == shortday_label:
+                shortdays_out.append(
+                    {"day": d.day, "label": label, "hours": shortday_hours}
+                )
+                continue
+            if label in exclude_labels:
                 continue
             holidays_out.append({"day": d.day, "label": label})
 
@@ -925,6 +958,7 @@ def register_routes(app: FastAPI) -> None:
             "tasks": tasks,
             "vacations": vacations_out,
             "holidays": holidays_out,
+            "shortdays": shortdays_out,
             "daily_totals": daily_totals,
             "month_total": round(month_total, 2),
             "days_in_month": days_in_month,

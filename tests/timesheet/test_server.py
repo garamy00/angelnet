@@ -58,7 +58,7 @@ def test_vacation_applications_route(api, mock_client):
     mock_client.list_vacation_applications = AsyncMock(return_value=[
         {"draft_date": "2026-05-11", "vacation_type": "반차(오후)",
          "reason": "개인 사유", "from_date": "2026-05-15", "to_date": "2026-05-15",
-         "days": "0.5 일", "registered_date": "2026-05-11", "name": "손대곤",
+         "days": "0.5 일", "registered_date": "2026-05-11", "name": "홍길동",
          "status": "품의완료", "vacation_id": "36425"},
     ])
     r = api.get("/api/vacation/applications?year=2026")
@@ -1806,3 +1806,76 @@ def test_monthly_grid_holidays_exclude_labels(api, mock_client):
     assert 1 in days   # 노동절
     assert 5 in days   # 어린이날
     assert 15 not in days  # 가정의날 — 제외됨
+
+
+def test_categories_recent_returns_recent_distinct_categories(api):
+    """최근 N일 내 사용한 카테고리만 최근순 distinct 로 반환한다."""
+    import datetime as dt
+
+    today = dt.date.today()
+    recent = today.isoformat()
+    old = (today - dt.timedelta(days=40)).isoformat()
+    recent_week = "2026-W20"
+
+    # 기간 내 두 카테고리, 기간 밖 한 카테고리
+    api.put(f"/api/days/{recent}", json={
+        "week_iso": recent_week,
+        "entries": [
+            {"category": "A 카테고리", "hours": 1, "body_md": ""},
+            {"category": "B 카테고리", "hours": 2, "body_md": ""},
+        ],
+    })
+    api.put(f"/api/days/{old}", json={
+        "week_iso": "2026-W14",
+        "entries": [{"category": "오래된 카테고리", "hours": 1, "body_md": ""}],
+    })
+
+    r = api.get("/api/categories/recent?days=14")
+    assert r.status_code == 200
+    cats = r.json()
+    assert "오래된 카테고리" not in cats
+    assert set(cats) == {"A 카테고리", "B 카테고리"}
+
+
+def test_monthly_grid_family_day_is_shortday_not_holiday(api, mock_client):
+    """가정의날은 full-holiday 가 아니라 1h shortday 로, 합계 미반영."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[
+        {"date": "2026-05-01", "label": "노동절", "types": ["public"]},
+        {"date": "2026-05-15", "label": "가정의날", "types": ["company"]},
+    ])
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    assert r.status_code == 200
+    data = r.json()
+
+    # 가정의날은 shortdays 에 1h 로
+    assert data["shortdays"] == [
+        {"day": 15, "label": "가정의날", "hours": 1}
+    ]
+    # full-holiday 목록엔 없음 (노동절만)
+    assert {h["day"] for h in data["holidays"]} == {1}
+    # 합계 미반영 — 15일 daily_total 에 가정의날 1h 안 더해짐
+    assert data["daily_totals"].get("15") in (None, 0, 0.0)
+
+
+def test_monthly_grid_family_day_shortday_even_when_excluded(api, mock_client):
+    """holiday_exclude_labels 에 가정의날이 있어도 shortdays 에 그대로 나온다."""
+    from unittest.mock import AsyncMock
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[])
+    mock_client.list_vacations = AsyncMock(return_value=[])
+    mock_client.list_holidays = AsyncMock(return_value=[
+        {"date": "2026-05-15", "label": "가정의날", "types": ["company"]},
+    ])
+    api.put("/api/settings", json={
+        "misc.holiday_exclude_labels": "가정의날",
+    })
+
+    r = api.get("/api/timesheet/monthly-grid?year_month=2026-05")
+    data = r.json()
+    assert data["shortdays"] == [
+        {"day": 15, "label": "가정의날", "hours": 1}
+    ]
+    assert data["holidays"] == []

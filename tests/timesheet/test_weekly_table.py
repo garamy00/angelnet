@@ -245,13 +245,13 @@ def test_build_rows_vacation_row_this_week_pm_half(seeded_conn) -> None:
     vacs = [{"date": "2026-05-13", "type": "반차(오후)", "hours": 4.0}]
     rows = weekly_table.build_weekly_table_rows(
         seeded_conn, week_iso="2026-W20",
-        vacations=vacs, author_name="손대곤 부장",
+        vacations=vacs, author_name="홍길동 부장",
     )
     assert rows[-1]["project_name"] == weekly_table.VACATION_PROJECT_NAME
     cell = rows[-1]["this_week"]
     assert cell.startswith("*) 휴가\n")
     assert " - 오후 반차" in cell
-    assert "   . 손대곤 부장(05/13, 수, 오후)" in cell
+    assert "   . 홍길동 부장(05/13, 수, 오후)" in cell
     # 지난주 셀은 비어있어야 함
     assert rows[-1]["last_week"] == ""
 
@@ -266,11 +266,11 @@ def test_build_rows_vacation_consecutive_range(seeded_conn) -> None:
     ]
     rows = weekly_table.build_weekly_table_rows(
         seeded_conn, week_iso="2026-W20",
-        vacations=vacs, author_name="손대곤",
+        vacations=vacs, author_name="홍길동",
     )
     cell = rows[-1]["this_week"]
     assert " - 연차" in cell
-    assert "   . 손대곤(05/11~14, 월~목)" in cell
+    assert "   . 홍길동(05/11~14, 월~목)" in cell
 
 
 def test_build_rows_vacation_two_types_split_into_groups(seeded_conn) -> None:
@@ -281,13 +281,13 @@ def test_build_rows_vacation_two_types_split_into_groups(seeded_conn) -> None:
     ]
     rows = weekly_table.build_weekly_table_rows(
         seeded_conn, week_iso="2026-W20",
-        vacations=vacs, author_name="손대곤",
+        vacations=vacs, author_name="홍길동",
     )
     cell = rows[-1]["this_week"]
     assert " - 오전 반차" in cell
     assert " - 연차" in cell
-    assert "   . 손대곤(05/11, 월, 오전)" in cell
-    assert "   . 손대곤(05/13, 수)" in cell
+    assert "   . 홍길동(05/11, 월, 오전)" in cell
+    assert "   . 홍길동(05/13, 수)" in cell
 
 
 def test_build_rows_vacation_fills_last_and_this_week(seeded_conn) -> None:
@@ -300,12 +300,12 @@ def test_build_rows_vacation_fills_last_and_this_week(seeded_conn) -> None:
     ]
     rows = weekly_table.build_weekly_table_rows(
         seeded_conn, week_iso="2026-W20",
-        vacations=vacs, author_name="손대곤",
+        vacations=vacs, author_name="홍길동",
     )
     last_cell = rows[-1]["last_week"]
     this_cell = rows[-1]["this_week"]
-    assert "   . 손대곤(05/04, 월)" in last_cell
-    assert "   . 손대곤(05/14, 목, 오후)" in this_cell
+    assert "   . 홍길동(05/04, 월)" in last_cell
+    assert "   . 홍길동(05/14, 목, 오후)" in this_cell
 
 
 def test_build_rows_vacation_author_name_empty_omits_prefix(seeded_conn) -> None:

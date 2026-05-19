@@ -35,5 +35,8 @@ src/angeldash/static/week-mockup.html
 # 정화 전 spec/plan 문서 (본인 backup, 공개 안 함)
 docs/
 
+# 프로젝트 Claude 규칙 (개인 설정, 공개 안 함)
+CLAUDE.md
+
 # .git 백업 폴더 (절대 commit 금지)
 .git.backup-*

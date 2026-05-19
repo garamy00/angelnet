@@ -809,11 +809,11 @@ _VACATION_SAMPLE_HTML = """
 <tbody>
 <tr><td>2025-12-23</td><td>연차</td><td>&nbsp;&nbsp;징검다리</td>
     <td>2026-12-31 ~ 2026-12-31</td><td>1.0 일</td>
-    <td>2025-12-23</td><td>손대곤</td><td>품의완료</td>
+    <td>2025-12-23</td><td>홍길동</td><td>품의완료</td>
     <td><button onclick="goSubmit('detail','35115','detail');">조회</button></td></tr>
 <tr><td>2026-05-11</td><td>반차(오후)</td><td>개인 사유</td>
     <td>2026-05-15 ~ 2026-05-15</td><td>0.5 일</td>
-    <td>2026-05-11</td><td>손대곤</td><td>품의완료</td>
+    <td>2026-05-11</td><td>홍길동</td><td>품의완료</td>
     <td><button onclick="goSubmit('detail','36425','detail');">조회</button></td></tr>
 </tbody>
 </table>
