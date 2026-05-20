@@ -55,6 +55,11 @@ const EMOJI_TO_ICON = {
   '☀️': 'sun',
   '☀': 'sun',
   '📂': 'folder',
+  '✅': 'check-circle-2',
+  '⏳': 'clock',
+  '⚠️': 'alert-triangle',
+  '⚠': 'alert-triangle',
+  '❌': 'x-circle',
 };
 
 const BUTTON_ICON_MAP = {

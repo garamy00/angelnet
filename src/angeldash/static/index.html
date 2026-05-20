@@ -40,13 +40,29 @@
                 placeholder="월간/주간 계획, 차주 예정 등 자유 형식. 일일/주간 보고에 복사해 쓰세요."></textarea>
     </details>
 
+    <section class="timesheet-toolbox">
+      <span class="toolbox-label"><i data-lucide="clock"></i> 타임시트</span>
+      <span class="group-label">대상:</span>
+      <select id="target">
+        <option value="week">이번 주 전체</option>
+        <option value="today">오늘만</option>
+      </select>
+      <button class="primary" id="btn-timesheet"><i data-lucide="send"></i> 일괄 입력</button>
+      <button id="btn-verify" title="회사 시스템 시간과 비교"><i data-lucide="search"></i> 동기화 확인</button>
+      <span class="toolbox-divider" aria-hidden="true"></span>
+      <button id="btn-monthly-preview"
+            title="이번달 task × 일자 매트릭스 (회사 시스템 fetch)"><i data-lucide="table"></i> 이번달 미리보기</button>
+      <span class="spacer"></span>
+      <button id="btn-excel" title="이 주가 속한 달의 회사 시스템 Excel 다운로드"><i data-lucide="download"></i> 월간 다운로드</button>
+    </section>
+
     <section class="week-header">
       <button id="prev-week">◀ 이전 주</button>
       <span id="week-label">로딩…</span>
       <button id="this-week">이번 주</button>
       <button id="next-week">다음 주 ▶</button>
       <span class="spacer"></span>
-      <button id="btn-excel" title="이 주가 속한 달의 회사 시스템 Excel 다운로드"><i data-lucide="download"></i> 다운로드</button>
+      <button class="primary" id="btn-notion" title="이번 주 엔트리를 Notion DB 에 동기화 (중복 시 업데이트)"><i data-lucide="refresh-cw"></i> Notion 동기화</button>
     </section>
 
     <section id="days"></section>
@@ -58,23 +74,7 @@
 
     <section class="actions-bar">
       <div class="action-group">
-        <span class="group-label">타임시트 대상:</span>
-        <select id="target">
-          <option value="week">이번 주 전체</option>
-          <option value="today">오늘만</option>
-        </select>
-        <button class="primary" id="btn-timesheet"><i data-lucide="send"></i> 타임시트 입력</button>
-        <button id="btn-verify" title="회사 시스템 시간과 비교"><i data-lucide="search"></i> 타임시트 확인</button>
-        <button id="btn-monthly-preview"
-              title="이번달 task × 일자 매트릭스 (회사 시스템 fetch)"><i data-lucide="table"></i> 이번달 미리보기</button>
-      </div>
-
-      <div class="action-group">
         <button class="primary" id="btn-upnote" title="이번 주 전체 노트 생성"><i data-lucide="refresh-cw"></i> UpNote 저장</button>
-      </div>
-
-      <div class="action-group">
-        <button class="primary" id="btn-notion" title="이번 주 엔트리를 Notion DB 에 동기화 (중복 시 업데이트)"><i data-lucide="refresh-cw"></i> Notion 동기화</button>
       </div>
     </section>
 

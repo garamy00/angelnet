@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/static/css/main.css">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body>
+<body class="page-projects">
   <header>
     <nav>
       <a href="/"><i data-lucide="calendar-days"></i> 일일업무보고</a>
@@ -52,7 +52,18 @@
         <input id="ym-input" type="month">
         <button class="primary" id="load-remote">현재 타임시트 task 목록 로드</button>
       </div>
-      <ul id="remote-tasks"></ul>
+      <table id="remote-tasks-table">
+        <thead>
+          <tr>
+            <th>프로젝트명</th>
+            <th>구분</th>
+            <th style="width:80px">task_id</th>
+            <th style="width:110px">코드</th>
+            <th style="width:140px"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
 
     <section>

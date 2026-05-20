@@ -258,18 +258,29 @@ document.getElementById('load-remote').addEventListener('click', async () => {
 });
 
 function renderRemoteTasks(tasks) {
-  const ul = document.getElementById('remote-tasks');
-  ul.innerHTML = '';
+  const tbody = document.querySelector('#remote-tasks-table tbody');
+  tbody.innerHTML = '';
   for (const t of tasks) {
-    const li = document.createElement('li');
     const wt = (t.work_type || '').trim();
-    const wtTag = wt ? `<span class="work-type-tag">[${escapeHtml(wt)}]</span>` : '';
-    const meta = `<span class="muted">task_id=${t.task_id}</span>`;
     const labelPlain = wt ? `${t.name} [${wt}]` : t.name;
+    const tr = document.createElement('tr');
+    const wtCell = wt
+      ? `<span class="work-type-tag">${escapeHtml(wt)}</span>`
+      : '<span class="muted">—</span>';
+    const codeCell = t.project_code
+      ? escapeHtml(t.project_code)
+      : '<span class="muted">—</span>';
+    tr.innerHTML = `
+      <td>${escapeHtml(t.name)}</td>
+      <td>${wtCell}</td>
+      <td><span class="muted">${escapeHtml(String(t.task_id ?? ''))}</span></td>
+      <td>${codeCell}</td>
+      <td class="action-cell"></td>
+    `;
+    const actionCell = tr.querySelector('.action-cell');
     if (t.already_registered) {
-      li.innerHTML = `<span>${escapeHtml(t.name)}</span> ${wtTag} ${meta} <span class="muted">✓ 등록됨</span>`;
+      actionCell.innerHTML = '<span class="muted">✓ 등록됨</span>';
     } else {
-      li.innerHTML = `<span>${escapeHtml(t.name)}</span> ${wtTag} ${meta} `;
       const btn = document.createElement('button');
       btn.textContent = '+ 프로젝트로 추가';
       btn.addEventListener('click', async () => {
@@ -282,16 +293,16 @@ function renderRemoteTasks(tasks) {
             work_type: wt,
           });
           toast(`등록됨: ${labelPlain}`);
-          li.innerHTML = `<span>${escapeHtml(t.name)}</span> ${wtTag} ${meta} <span class="muted">✓ 등록됨</span>`;
+          actionCell.innerHTML = '<span class="muted">✓ 등록됨</span>';
           await refreshAll();
         } catch (err) {
           btn.disabled = false;
           toast(`실패: ${err.message}`, 'fail');
         }
       });
-      li.appendChild(btn);
+      actionCell.appendChild(btn);
     }
-    ul.appendChild(li);
+    tbody.appendChild(tr);
   }
 }
 

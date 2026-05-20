@@ -1480,6 +1480,8 @@ def register_routes(app: FastAPI) -> None:
         "upnote.title_template": DEFAULT_UPNOTE_TITLE,
         "upnote.body_template": DEFAULT_UPNOTE_BODY,
         "team_report.template": DEFAULT_TEAM_REPORT,
+        # 팀장 보고 복사 시 '소스 Commit' 섹션 포함 여부 (기본: 미포함)
+        "team_report.include_source_commit": "false",
         # 출근일로 취급할 공휴일 label (콤마/줄바꿈 구분)
         "misc.holiday_exclude_labels": "",
         "join.auto_task_name": "개발",  # 프로젝트 가입 시 자동으로 가입할 task name
@@ -1633,6 +1635,11 @@ def register_routes(app: FastAPI) -> None:
             template = db_module.get_setting(conn, "team_report.template")
             if not template:
                 template = SETTING_DEFAULTS["team_report.template"]
+            include_sc_raw = (
+                db_module.get_setting(conn, "team_report.include_source_commit")
+                or SETTING_DEFAULTS["team_report.include_source_commit"]
+            )
+            include_source_commit = include_sc_raw.strip().lower() == "true"
             if payload.date:
                 ctx = fmt_module.build_team_report_context(
                     conn, date=payload.date
@@ -1645,6 +1652,11 @@ def register_routes(app: FastAPI) -> None:
                 target_range = payload.week_iso
             else:
                 raise HTTPException(400, "date or week_iso required")
+            # 설정에 따라 '소스 Commit' 섹션을 템플릿 렌더링 단계에서 제외.
+            # 템플릿이 source_commit 또는 source_commit_label 어느 쪽으로
+            # if 분기하든 falsy 가 되도록 두 키 모두 빈 문자열로 덮어쓴다.
+            if not include_source_commit:
+                ctx = {**ctx, "source_commit": "", "source_commit_label": ""}
             text = fmt_module.render_team_report(template, ctx)
         except Exception as exc:
             db_module.log_action(

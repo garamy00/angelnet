@@ -50,6 +50,7 @@ const BOOL_KEYS = {
   'notion-weekly-report-enabled': 'notion.weekly_report_enabled',
   'email-enabled': 'email.enabled',
   'email-smtp-tls': 'email.smtp_tls',
+  'cb-team-report-source-commit': 'team_report.include_source_commit',
 };
 
 let defaults = {};

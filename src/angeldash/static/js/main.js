@@ -10,6 +10,43 @@ import { loadWeekSidebar, highlightCurrent } from './week_sidebar.js';
 
 let currentWeek = isoWeek(new Date());
 let currentData = { days: [], note: '', vacations: [], holidays: [] };
+// 카테고리 → {project_id, project_name, excluded} 캐시. 카테고리 매핑 표시용.
+const categoryMappings = new Map();
+
+async function refreshCategoryMappings() {
+  try {
+    const list = await apiGet('/api/mappings');
+    categoryMappings.clear();
+    for (const m of list) categoryMappings.set(m.category, m);
+    document.querySelectorAll('.entry').forEach(updateEntryProject);
+  } catch (e) {
+    console.error('mappings fetch failed', e);
+  }
+}
+
+function updateEntryProject(row) {
+  const slot = row.querySelector('.entry-project');
+  if (!slot) return;
+  const cat = (row.querySelector('.category')?.value || '').trim();
+  if (!cat) {
+    slot.innerHTML = '';
+    slot.removeAttribute('title');
+    return;
+  }
+  const m = categoryMappings.get(cat);
+  if (m && m.excluded) {
+    slot.innerHTML = '<span class="project-tag excluded">타임시트 제외</span>';
+    slot.title = '이 카테고리는 타임시트 동기화에서 제외됨';
+    return;
+  }
+  if (m && m.project_name) {
+    slot.innerHTML = `<span class="project-tag">${escapeHtml(m.project_name)}</span>`;
+    slot.title = `프로젝트: ${m.project_name}`;
+    return;
+  }
+  slot.innerHTML = `<a class="project-link-btn" href="/projects.html" target="_blank" rel="noopener">${icon('link')} <span>프로젝트 매핑</span></a>`;
+  slot.title = '아직 프로젝트가 매핑되지 않음 — 프로젝트 페이지에서 설정';
+}
 
 // 최근 카테고리를 datalist 에 채워 카테고리 input 자동완성에 사용.
 async function refreshCategorySuggestions() {
@@ -47,14 +84,16 @@ async function applySyncToggles() {
     const notionOn = (s['notion.enabled'] ?? 'false').toString().toLowerCase() === 'true';
     const upBtn = document.getElementById('btn-upnote');
     const noBtn = document.getElementById('btn-notion');
-    // 단일 버튼이 들어있는 action-group 전체를 숨김 (구분선까지 함께 제거)
     if (upBtn) {
       const grp = upBtn.closest('.action-group') || upBtn;
       grp.style.display = upnoteOn ? '' : 'none';
+      // 하단 액션바는 UpNote 만 남았으므로 비활성이면 sticky bar 자체를 숨김
+      const bar = upBtn.closest('.actions-bar');
+      if (bar) bar.style.display = upnoteOn ? '' : 'none';
     }
     if (noBtn) {
-      const grp = noBtn.closest('.action-group') || noBtn;
-      grp.style.display = notionOn ? '' : 'none';
+      // btn-notion 은 week-header 안에 있어 action-group 부모가 없음 → 버튼만 토글
+      noBtn.style.display = notionOn ? '' : 'none';
     }
   } catch (e) {
     console.error('sync toggles fetch failed', e);
@@ -278,11 +317,13 @@ function renderEntry(entry) {
       <input class="hours" type="number" min="0" max="24" step="1"
              value="${entry.hours}">
       <span class="hours-unit">h</span>
+      <span class="entry-project"></span>
       <span class="entry-spacer"></span>
       <button class="remove icon-only" type="button" title="이 카테고리 삭제" aria-label="카테고리 삭제">${icon('trash-2')}</button>
     </div>
     <textarea class="entry-body" placeholder="본문 (markdown)">${escapeHtml(entry.body_md)}</textarea>
   `;
+  updateEntryProject(row);
   const debounced = debounce(() => {
     const d = row.closest('.day-block')?.dataset.date;
     if (d) { saveDay(d); updateDayTotals(row.closest('.day-block')); }
@@ -290,6 +331,7 @@ function renderEntry(entry) {
   for (const el of row.querySelectorAll('input, textarea')) {
     el.addEventListener('input', debounced);
   }
+  row.querySelector('.category').addEventListener('input', () => updateEntryProject(row));
   row.querySelector('.remove').addEventListener('click', () => {
     const block = row.closest('.day-block');
     row.remove();
@@ -346,9 +388,10 @@ async function saveDay(date) {
   const entries = collectEntries(block);
   try {
     await apiPut(`/api/days/${date}`, { week_iso: currentWeek, entries });
-    // 저장 직후 사이드바·카테고리 자동완성 갱신 (새 주차/카테고리 즉시 반영)
+    // 저장 직후 사이드바·카테고리 자동완성·매핑 갱신 (새 주차/카테고리 즉시 반영)
     reloadWeekSidebar();
     refreshCategorySuggestions();
+    refreshCategoryMappings();
   } catch (e) {
     toast(`저장 실패: ${e.message}`, 'fail');
   }
@@ -471,25 +514,33 @@ function applyVerifyResult(items) {
       badge.className = 'sync-badge';
       continue;
     }
-    badge.className = `sync-badge sync-${info.sync_status}`;
     // local_task_total: 같은 (date, task) 의 도구 entries 합. 회사 시스템과 합 단위로 비교.
     const localTotal = info.local_task_total ?? info.hours;
     const task = info.task_name || '';
-    switch (info.sync_status) {
+    // 양쪽 다 0 인 'synced' 는 값이 안 들어간 상태로 따로 표시 (zero_match)
+    const isZeroMatch = info.sync_status === 'synced'
+      && Number(localTotal) === 0
+      && Number(info.remote_hours) === 0;
+    badge.className = `sync-badge sync-${isZeroMatch ? 'zero_match' : info.sync_status}`;
+    switch (isZeroMatch ? 'zero_match' : info.sync_status) {
       case 'synced':
-        badge.textContent = '✅';
+        badge.innerHTML = '<i data-lucide="check-circle-2"></i> <span>일치</span>';
         badge.title = `${task} ${localTotal}h 일치`;
         break;
+      case 'zero_match':
+        badge.innerHTML = '<i data-lucide="circle-dashed"></i> <span>0h (값 없음)</span>';
+        badge.title = `${task} — 도구·회사 모두 0h. 시간이 안 들어갔는지 확인 필요.`;
+        break;
       case 'not_submitted':
-        badge.textContent = `⏳ 미제출 (task 합 ${localTotal}h)`;
+        badge.innerHTML = `<i data-lucide="clock"></i> <span>미제출 (task 합 ${localTotal}h)</span>`;
         badge.title = `${task} — 회사 시스템에 아직 안 올라감`;
         break;
       case 'remote_only':
-        badge.textContent = `⚠️ 회사=${info.remote_hours}h (도구=0h)`;
+        badge.innerHTML = `<i data-lucide="alert-triangle"></i> <span>회사=${info.remote_hours}h (도구=0h)</span>`;
         badge.title = `${task} — 회사 시스템에 시간 있음`;
         break;
       case 'mismatch':
-        badge.textContent = `⚠️ task 합 ${localTotal}h vs 회사=${info.remote_hours}h`;
+        badge.innerHTML = `<i data-lucide="alert-triangle"></i> <span>task 합 ${localTotal}h vs 회사=${info.remote_hours}h</span>`;
         badge.title = `${task} — 도구와 회사 시스템의 시간이 다름. 같은 task 로 매핑된 모든 카테고리 합산 기준.`;
         break;
       case 'excluded':
@@ -506,24 +557,52 @@ function applyVerifyResult(items) {
     const existingBtn = row.querySelector('.sync-push-btn');
     if (existingBtn) existingBtn.remove();
 
-    // not_submitted / mismatch / remote_only 일 때 push 버튼 추가
-    if (['not_submitted', 'mismatch', 'remote_only'].includes(info.sync_status)
-        && info.task_name && info.local_task_total != null) {
+    // not_submitted / mismatch / remote_only / zero_match 일 때 push 버튼 추가
+    // zero_match 는 시간을 입력한 뒤 바로 회사 시스템에 등록할 수 있도록 '추가' 라벨
+    const showPushBtn = (
+      isZeroMatch
+      || ['not_submitted', 'mismatch', 'remote_only'].includes(info.sync_status)
+    );
+    if (showPushBtn && info.task_name) {
       const pushBtn = document.createElement('button');
-      pushBtn.textContent = '푸시';
+      pushBtn.textContent = isZeroMatch ? '추가' : '푸시';
       pushBtn.className = 'sync-push-btn';
-      pushBtn.title = `[${info.task_name}] ${info.date} 의 도구 합 ${info.local_task_total}h 를 회사에 overwrite`;
+      const baseTitle = isZeroMatch
+        ? `[${info.task_name}] ${info.date} 에 현재 입력된 시간으로 회사 시스템에 등록`
+        : `[${info.task_name}] ${info.date} 의 도구 합 ${info.local_task_total}h 를 회사에 overwrite`;
+      pushBtn.title = baseTitle;
       pushBtn.addEventListener('click', async () => {
-        if (!confirm(`회사 시스템에 [${info.task_name}] ${info.date} = ${info.local_task_total}h 로 덮어쓰기 할까요?`)) return;
+        // zero_match: 사용자가 verify 이후 hours 를 새로 입력했을 수 있으므로
+        // 현재 row 의 hours 인풋 값을 그대로 사용. 아직 0 이면 안내 후 종료.
+        let hoursToPush = info.local_task_total;
+        if (isZeroMatch) {
+          const h = parseFloat(row.querySelector('.hours')?.value || '0');
+          if (!h || h <= 0) {
+            toast('먼저 시간을 입력하세요', 'fail');
+            return;
+          }
+          hoursToPush = h;
+        }
+        if (!confirm(`회사 시스템에 [${info.task_name}] ${info.date} = ${hoursToPush}h 로 ${isZeroMatch ? '등록' : '덮어쓰기'} 할까요?`)) return;
         pushBtn.disabled = true;
         try {
+          // 추가 전 현재 입력 상태를 먼저 저장 (debounce 대기 회피)
+          if (isZeroMatch) {
+            const d = row.closest('.day-block')?.dataset.date;
+            if (d) await saveDay(d);
+          }
           await apiPost('/api/actions/timesheet-push-one', {
             date: info.date,
             task_name: info.task_name,
             task_work_type: info.task_work_type || '',
-            hours: info.local_task_total,
+            hours: hoursToPush,
           });
           toast('회사 시스템에 푸시됨');
+          badge.className = 'sync-badge sync-synced';
+          badge.innerHTML = '<i data-lucide="check-circle-2"></i> <span>일치</span>';
+          badge.title = `${info.task_name} ${hoursToPush}h 일치`;
+          if (window.lucide?.createIcons) window.lucide.createIcons();
+          pushBtn.remove();
         } catch (e) {
           pushBtn.disabled = false;
           toast(`실패: ${e.message}`, 'fail');
@@ -551,6 +630,64 @@ function applyVerifyResult(items) {
       <span class="muted">⚠️ 회사 시스템에만 있음:</span>
       <strong>${escapeHtml(it.task_name)}</strong>${wtTag} ${it.remote_hours}h
     `;
+    const addLocalBtn = document.createElement('button');
+    addLocalBtn.textContent = '내 카테고리로 추가';
+    addLocalBtn.className = 'orphan-add';
+    addLocalBtn.title = '회사 시스템 항목을 이 날짜의 로컬 카테고리로 등록';
+    addLocalBtn.addEventListener('click', async () => {
+      // (task_name, task_work_type) 와 매칭되는 매핑 카테고리 검색
+      const wantWt = (it.task_work_type || '').trim();
+      let matchedCategory = null;
+      for (const [cat, m] of categoryMappings) {
+        if (m.project_name !== it.task_name) continue;
+        const haveWt = (m.project_work_type || '').trim();
+        if (haveWt === wantWt || haveWt === '') {
+          matchedCategory = cat;
+          break;
+        }
+      }
+      if (!matchedCategory) {
+        const proceed = confirm(
+          `[${fullLabel}] 에 매핑된 카테고리가 없습니다.\n`
+          + `'${it.task_name}' 이름으로 새 entry 를 추가할까요?\n`
+          + `(매핑은 프로젝트 페이지에서 별도 설정 필요)`,
+        );
+        if (!proceed) return;
+        matchedCategory = it.task_name;
+      }
+      // 같은 카테고리 entry 가 이미 있으면 hours 만 업데이트, 없으면 새로 추가
+      const existing = [...block.querySelectorAll('.entry')].find(
+        (e) => (e.querySelector('.category')?.value || '').trim() === matchedCategory,
+      );
+      addLocalBtn.disabled = true;
+      try {
+        const defaultBody = `- ${fullLabel}`;
+        if (existing) {
+          existing.querySelector('.hours').value = it.remote_hours;
+          const bodyEl = existing.querySelector('.entry-body');
+          if (bodyEl && !bodyEl.value.trim()) bodyEl.value = defaultBody;
+          updateEntryProject(existing);
+        } else {
+          const newEntry = renderEntry({
+            category: matchedCategory,
+            hours: it.remote_hours,
+            body_md: defaultBody,
+          });
+          const addCatBtn = block.querySelector('.add-entry-btn');
+          block.insertBefore(newEntry, addCatBtn);
+          if (window.lucide?.createIcons) window.lucide.createIcons();
+        }
+        await saveDay(it.date);
+        updateDayTotals(block);
+        toast('로컬 카테고리에 추가됨');
+        row.remove();
+      } catch (e) {
+        addLocalBtn.disabled = false;
+        toast(`실패: ${e.message}`, 'fail');
+      }
+    });
+    row.appendChild(addLocalBtn);
+
     const delBtn = document.createElement('button');
     delBtn.textContent = '회사에서 삭제';
     delBtn.className = 'orphan-delete';
@@ -659,8 +796,9 @@ document.addEventListener('keydown', (e) => {
 
 function renderMonthlyGrid(data) {
   const body = document.getElementById('monthly-modal-body');
-  document.getElementById('monthly-modal-title').textContent =
-    `<i data-lucide="table"></i> ${data.year_month} 타임시트 (회사 시스템)`;
+  document.getElementById('monthly-modal-title').innerHTML =
+    `<i data-lucide="table"></i> ${escapeHtml(data.year_month)} 타임시트 (회사 시스템)`;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
 
   const hasTasks = data.tasks && data.tasks.length > 0;
   const hasVacs = data.vacations && data.vacations.length > 0;
@@ -781,8 +919,9 @@ function renderMonthlyGrid(data) {
 
 document.getElementById('btn-monthly-preview').addEventListener('click', async () => {
   const ym = monthsForWeek(currentWeek)[0];  // 현재 주가 속한 월
-  document.getElementById('monthly-modal-title').textContent =
-    `<i data-lucide="table"></i> ${ym} 타임시트 (회사 시스템) — 로딩…`;
+  document.getElementById('monthly-modal-title').innerHTML =
+    `<i data-lucide="table"></i> ${escapeHtml(ym)} 타임시트 (회사 시스템) — 로딩…`;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
   document.getElementById('monthly-modal-body').innerHTML =
     '<p class="muted">회사 시스템에서 fetch 중… (몇 초 소요)</p>';
   openMonthlyModal();
@@ -806,4 +945,5 @@ document.getElementById('btn-monthly-preview').addEventListener('click', async (
 initHeader();
 initOngoingSchedule();
 refreshCategorySuggestions();
+refreshCategoryMappings();
 reloadWeekSidebar();

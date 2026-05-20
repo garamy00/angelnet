@@ -207,7 +207,7 @@ button {
   line-height: 1.4;
 }
 
-button:not(.primary):not(.btn-day-report):not(.orphan-delete):hover {
+button:not(.primary):not(.btn-day-report):not(.orphan-delete):not(.orphan-add):hover {
   background: var(--color-empty-hover);
   border-color: var(--color-muted);
 }
@@ -358,8 +358,8 @@ code {
     0 6px 24px rgba(var(--rgb-accent), 0.25);
 }
 .day-block--today .day-header {
-  background: rgba(var(--rgb-accent), 0.18);
-  border-bottom-color: var(--color-accent);
+  background: transparent;
+  border-bottom-color: rgba(var(--rgb-accent), 0.4);
 }
 .today-tag {
   font-size: 11px;
@@ -414,8 +414,57 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-.entry-header input.category { flex: 1; }
-.entry-header input.hours { width: 60px; text-align: right; }
+.entry-header input.category { flex: 0 0 360px; min-width: 0; }
+.entry-header input.hours { flex: 0 0 60px; width: 60px; text-align: right; }
+
+/* 카테고리 옆 프로젝트 매핑 표시. 매핑된 프로젝트명 또는 매핑 링크 버튼. */
+.entry-header .entry-project {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 220px;
+  min-width: 0;
+}
+.entry-header .project-tag {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--color-muted);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+.entry-header .project-tag.excluded {
+  color: var(--color-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+.entry-header .project-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.entry-header .project-link-btn:hover {
+  background: var(--color-empty-hover);
+  border-style: solid;
+}
+.entry-header .project-link-btn svg { width: 12px; height: 12px; }
 .entry-header .hours-unit {
   color: var(--color-muted);
   font-size: 13px;
@@ -448,6 +497,10 @@ code {
 }
 .entry-body::placeholder { color: #41444a; opacity: 1; }
 
+/* 라이트 모드: 본문 텍스트는 또렷하게, placeholder 는 연하게 (다크 모드의 반대) */
+:root[data-theme="light"] .entry-body { color: #374151; }
+:root[data-theme="light"] .entry-body::placeholder { color: #cbd5e1; }
+
 .add-entry-btn { margin-left: 32px; }
 
 .totals {
@@ -469,17 +522,49 @@ code {
   margin-top: 24px;
   box-shadow: var(--shadow-medium);
 }
+
+/* 상단 타임시트 도구 박스 — 일괄 입력 / 확인 / 미리보기 / 월간 다운로드 */
+.timesheet-toolbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.timesheet-toolbox .toolbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-fg);
+  padding-right: 10px;
+  border-right: 1px solid var(--color-border);
+  margin-right: 4px;
+}
+.timesheet-toolbox .toolbox-label svg { width: 16px; height: 16px; }
+.timesheet-toolbox .spacer { flex: 1; }
+.timesheet-toolbox .toolbox-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--color-border);
+  margin: 0 4px;
+}
 /* 마지막 day-block / week-notes 가 액션바 뒤에 가려지지 않도록 main 자체에 여백 */
 main { padding-bottom: 10px; }
 
-/* ─── 설정 페이지 — 본문 폭 고정 + 중앙 정렬 ───── */
-body.page-settings main {
-  max-width: 820px;
+/* ─── 설정/프로젝트 페이지 — 본문 폭 고정 + 중앙 정렬 ───── */
+body.page-settings main,
+body.page-projects main {
+  max-width: 1200px;
   margin: 0 auto;
 }
 
 /* ─── 설정 페이지 — 카드형 섹션 ───────────────── */
-main > section:not(.actions-bar) {
+body.page-settings main > section:not(.actions-bar) {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -489,7 +574,7 @@ main > section:not(.actions-bar) {
 }
 
 /* h2 + 우측 토글을 묶는 타이틀 바 */
-main > section:not(.actions-bar) > .section-title {
+body.page-settings main > section:not(.actions-bar) > .section-title {
   margin: 0 -28px 18px;
   padding: 12px 28px;
   background: var(--color-surface-2);
@@ -499,7 +584,7 @@ main > section:not(.actions-bar) > .section-title {
   justify-content: space-between;
   gap: 12px;
 }
-main > section:not(.actions-bar) > .section-title > h2 {
+body.page-settings main > section:not(.actions-bar) > .section-title > h2 {
   margin: 0;
   padding: 0;
   background: none;
@@ -509,14 +594,14 @@ main > section:not(.actions-bar) > .section-title > h2 {
 }
 
 /* h3 + 우측 토글 묶음 (Notion 의 Projects / Week Summary / Weekly Report) */
-main > section:not(.actions-bar) > .subsection-title {
+body.page-settings main > section:not(.actions-bar) > .subsection-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin: 26px 0 10px;
 }
-main > section:not(.actions-bar) > .subsection-title > h3 {
+body.page-settings main > section:not(.actions-bar) > .subsection-title > h3 {
   margin: 0;
   padding: 6px 0 6px 12px;
   border-left: 3px solid var(--color-accent);
@@ -596,7 +681,7 @@ main > section:not(.actions-bar) > .subsection-title > h3 {
    비활성 상태에서도 섹션 식별이 가능. */
 .is-collapsed { display: none !important; }
 
-main > section:not(.actions-bar) > h2 {
+body.page-settings main > section:not(.actions-bar) > h2 {
   margin: 0 -28px 18px;
   padding: 16px 28px;
   background: var(--color-surface-2);
@@ -606,7 +691,7 @@ main > section:not(.actions-bar) > h2 {
   letter-spacing: -0.2px;
 }
 
-main > section:not(.actions-bar) > h3 {
+body.page-settings main > section:not(.actions-bar) > h3 {
   margin: 26px 0 10px;
   padding: 6px 0 6px 12px;
   border-left: 3px solid var(--color-accent);
@@ -614,7 +699,7 @@ main > section:not(.actions-bar) > h3 {
   font-weight: 600;
   color: var(--color-text);
 }
-main > section:not(.actions-bar) > h4 {
+body.page-settings main > section:not(.actions-bar) > h4 {
   margin: 18px 0 6px;
   font-size: 13px;
   font-weight: 600;
@@ -622,7 +707,7 @@ main > section:not(.actions-bar) > h4 {
 }
 
 /* 첫 단락 (section 의 도입 설명) — h2 바로 아래 */
-main > section:not(.actions-bar) > h2 + p.muted {
+body.page-settings main > section:not(.actions-bar) > h2 + p.muted {
   margin-top: 0;
   margin-bottom: 18px;
   padding: 10px 14px;
@@ -633,23 +718,23 @@ main > section:not(.actions-bar) > h2 + p.muted {
 }
 
 /* 일반 label — block 배치, 위에 라벨, 아래 입력 */
-main > section:not(.actions-bar) > label {
+body.page-settings main > section:not(.actions-bar) > label {
   display: block;
   margin: 16px 0 4px;
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text);
 }
-main > section:not(.actions-bar) > label > input[type="text"],
-main > section:not(.actions-bar) > label > input[type="password"],
-main > section:not(.actions-bar) > label > select {
+body.page-settings main > section:not(.actions-bar) > label > input[type="text"],
+body.page-settings main > section:not(.actions-bar) > label > input[type="password"],
+body.page-settings main > section:not(.actions-bar) > label > select {
   display: block;
   width: 100%;
   margin-top: 6px;
 }
 
 /* checkbox label — 가로 배치 */
-main > section:not(.actions-bar) > label:has(> input[type="checkbox"]) {
+body.page-settings main > section:not(.actions-bar) > label:has(> input[type="checkbox"]) {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -660,10 +745,10 @@ main > section:not(.actions-bar) > label:has(> input[type="checkbox"]) {
   cursor: pointer;
   user-select: none;
 }
-main > section:not(.actions-bar) > label:has(> input[type="checkbox"]):hover {
+body.page-settings main > section:not(.actions-bar) > label:has(> input[type="checkbox"]):hover {
   background: var(--color-empty-hover);
 }
-main > section:not(.actions-bar) > label > input[type="checkbox"] {
+body.page-settings main > section:not(.actions-bar) > label > input[type="checkbox"] {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
@@ -671,7 +756,7 @@ main > section:not(.actions-bar) > label > input[type="checkbox"] {
 }
 
 /* 설명 문단 (label 또는 다른 요소 바로 뒤) — 들여쓰고 톤다운 */
-main > section:not(.actions-bar) > p.muted {
+body.page-settings main > section:not(.actions-bar) > p.muted {
   margin: 4px 0 0;
   padding: 0 0 0 2px;
   font-size: 12px;
@@ -680,14 +765,14 @@ main > section:not(.actions-bar) > p.muted {
 }
 
 /* details — property 커스터마이즈 펼침 */
-main > section:not(.actions-bar) > details {
+body.page-settings main > section:not(.actions-bar) > details {
   margin: 16px 0;
   padding: 0;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: 6px;
 }
-main > section:not(.actions-bar) > details > summary {
+body.page-settings main > section:not(.actions-bar) > details > summary {
   cursor: pointer;
   padding: 10px 14px;
   font-size: 13px;
@@ -695,11 +780,11 @@ main > section:not(.actions-bar) > details > summary {
   color: var(--color-muted);
   user-select: none;
 }
-main > section:not(.actions-bar) > details[open] > summary {
+body.page-settings main > section:not(.actions-bar) > details[open] > summary {
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text);
 }
-main > section:not(.actions-bar) > details > label {
+body.page-settings main > section:not(.actions-bar) > details > label {
   display: block;
   margin: 0;
   padding: 10px 14px;
@@ -707,17 +792,17 @@ main > section:not(.actions-bar) > details > label {
   color: var(--color-muted);
   border-bottom: 1px solid var(--color-border);
 }
-main > section:not(.actions-bar) > details > label:last-child {
+body.page-settings main > section:not(.actions-bar) > details > label:last-child {
   border-bottom: none;
 }
-main > section:not(.actions-bar) > details > label > input {
+body.page-settings main > section:not(.actions-bar) > details > label > input {
   display: block;
   margin-top: 4px;
   width: 100%;
 }
 
 /* textarea (출력 템플릿) */
-main > section:not(.actions-bar) > textarea {
+body.page-settings main > section:not(.actions-bar) > textarea {
   display: block;
   width: 100%;
   margin: 8px 0 8px;
@@ -725,7 +810,7 @@ main > section:not(.actions-bar) > textarea {
 }
 
 /* preview <pre> */
-main > section:not(.actions-bar) > pre.muted {
+body.page-settings main > section:not(.actions-bar) > pre.muted {
   margin: 10px 0 18px;
   padding: 12px 14px;
   background: var(--color-bg);
@@ -739,12 +824,12 @@ main > section:not(.actions-bar) > pre.muted {
 }
 
 /* 템플릿 액션 버튼 묶음 (미리보기 / 기본값 복원) */
-main > section:not(.actions-bar) > div {
+body.page-settings main > section:not(.actions-bar) > div {
   display: flex;
   gap: 8px;
   margin-bottom: 4px;
 }
-main > section:not(.actions-bar) > div > button {
+body.page-settings main > section:not(.actions-bar) > div > button {
   padding: 6px 14px;
   font-size: 12px;
 }
@@ -943,6 +1028,30 @@ main > section:not(.actions-bar) > div > button {
 .sync-excluded,
 .sync-no_mapping,
 .sync-no_remote_id { background: var(--color-surface-2); color: var(--color-muted); }
+.sync-zero_match { background: rgba(202, 138, 4, 0.18); color: #fcd34d; }
+
+:root[data-theme="light"] .sync-zero_match {
+  background: rgba(202, 138, 4, 0.14);
+  color: #a16207;
+}
+:root[data-theme="light"] .sync-synced {
+  background: rgba(21, 128, 61, 0.12);
+  color: #15803d;
+}
+:root[data-theme="light"] .sync-not_submitted {
+  background: rgba(202, 138, 4, 0.14);
+  color: #a16207;
+}
+:root[data-theme="light"] .sync-remote_only,
+:root[data-theme="light"] .sync-mismatch {
+  background: rgba(185, 28, 28, 0.12);
+  color: #b91c1c;
+}
+:root[data-theme="light"] .sync-excluded,
+:root[data-theme="light"] .sync-no_mapping,
+:root[data-theme="light"] .sync-no_remote_id {
+  color: #475569;
+}
 
 .week-header {
   display: flex;
@@ -963,8 +1072,16 @@ main > section:not(.actions-bar) > div > button {
   align-items: center;
   gap: 8px;
 }
-.orphan-delete {
+.orphan-add {
   margin-left: auto;
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.orphan-add:hover { opacity: 0.9; }
+.orphan-delete {
   background: var(--color-danger);
   color: white;
   border-color: var(--color-danger);
@@ -1013,6 +1130,7 @@ main > section:not(.actions-bar) > div > button {
   min-height: 40px;
 }
 .meta-misc::placeholder { color: #41444a; opacity: 1; }
+:root[data-theme="light"] .meta-misc::placeholder { color: #cbd5e1; }
 
 .meta-auto-btn {
   font-size: 12px;
@@ -1043,17 +1161,37 @@ main > section:not(.actions-bar) > div > button {
 #projects-table,
 #mappings-table,
 #patterns-table,
-#logs-table {
+#logs-table,
+#remote-tasks-table {
   margin-top: 12px;
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
+
+/* 보고서 프로젝트 등록 테이블 — 액션 버튼이 줄넘김되지 않도록 */
+#remote-tasks-table .action-cell {
+  text-align: center;
+  white-space: nowrap;
+}
+#remote-tasks-table .action-cell button {
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+/* 구분 컬럼 — work_type 태그가 줄넘김되지 않게 */
+#remote-tasks-table td:nth-child(2),
+#remote-tasks-table th:nth-child(2) {
+  white-space: nowrap;
+  width: 1%;
+}
+#remote-tasks-table .work-type-tag { white-space: nowrap; }
 #joinable-table th, #joinable-table td,
 #projects-table th, #projects-table td,
 #mappings-table th, #mappings-table td,
 #patterns-table th, #patterns-table td,
-#logs-table th, #logs-table td {
+#logs-table th, #logs-table td,
+#remote-tasks-table th, #remote-tasks-table td {
   border-bottom: 1px solid var(--color-border);
   padding: 6px 8px;
   text-align: left;
@@ -1063,7 +1201,8 @@ main > section:not(.actions-bar) > div > button {
 #projects-table thead th,
 #mappings-table thead th,
 #patterns-table thead th,
-#logs-table thead th {
+#logs-table thead th,
+#remote-tasks-table thead th {
   background: var(--color-surface-2);
   font-weight: 600;
   border-bottom: 2px solid var(--color-border);
@@ -1071,7 +1210,8 @@ main > section:not(.actions-bar) > div > button {
 #joinable-table tbody tr:hover,
 #projects-table tbody tr:hover,
 #mappings-table tbody tr:hover,
-#patterns-table tbody tr:hover {
+#patterns-table tbody tr:hover,
+#remote-tasks-table tbody tr:hover {
   background: var(--color-empty-hover);
 }
 #patterns-table td code,
