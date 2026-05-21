@@ -493,13 +493,14 @@ code {
 .entry-body {
   width: calc(100% - 32px);
   margin-left: 32px;
+  min-height: 120px;
   color: #8e95a4;
 }
-.entry-body::placeholder { color: #41444a; opacity: 1; }
+.entry-body::placeholder { color: #6b7280; opacity: 1; }
 
-/* 라이트 모드: 본문 텍스트는 또렷하게, placeholder 는 연하게 (다크 모드의 반대) */
+/* 라이트 모드: 본문 텍스트는 또렷하게, placeholder 는 연하지만 가독 가능한 톤 */
 :root[data-theme="light"] .entry-body { color: #374151; }
-:root[data-theme="light"] .entry-body::placeholder { color: #cbd5e1; }
+:root[data-theme="light"] .entry-body::placeholder { color: #94a3b8; }
 
 .add-entry-btn { margin-left: 32px; }
 

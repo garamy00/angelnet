@@ -13,11 +13,40 @@
 from __future__ import annotations
 
 import datetime
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
 from . import db
+
+# 일일보고 본문의 '다음주 할 일' 마커. 라인 시작에서 매칭 (앞 공백/불릿 허용).
+# `다음주`, `다음 주` 둘 다 인식. 매칭된 라인은 this_week 셀에서 제외되고
+# 엔트리 카테고리 매핑 프로젝트의 next_week 셀로 추출된다.
+_NEXT_WEEK_MARKER_RE = re.compile(
+    r"^[\s\-\*•]*\[\s*다음\s*주\s*\][\s:：]*(.*)$"
+)
+
+
+def _extract_next_week_lines(body_md: str) -> tuple[str, list[str]]:
+    """body_md 에서 '[다음주]' 마커 라인을 추출.
+
+    반환: (마커 라인 제거된 body, 추출된 항목 텍스트 리스트).
+    빈 항목(마커만 있는 줄)은 제외.
+    """
+    if not body_md:
+        return body_md, []
+    keep: list[str] = []
+    extracted: list[str] = []
+    for raw in body_md.split("\n"):
+        m = _NEXT_WEEK_MARKER_RE.match(raw)
+        if m:
+            text = m.group(1).strip()
+            if text:
+                extracted.append(text)
+        else:
+            keep.append(raw)
+    return "\n".join(keep), extracted
 
 _FALLBACK_PROJECT = "(매핑 없음)"
 # 자동 생성되는 휴가 행의 프로젝트명. UI/재생성 로직이 이 이름으로 행을 식별한다.
@@ -48,6 +77,16 @@ def _prev_week_iso(week_iso: str) -> str:
     monday = datetime.date.fromisocalendar(year, week, 1)
     prev_monday = monday - datetime.timedelta(days=7)
     iso = prev_monday.isocalendar()
+    return f"{iso.year}-W{iso.week:02d}"
+
+
+def _next_week_iso(week_iso: str) -> str:
+    """'YYYY-Www' 의 다음 주 ISO 문자열."""
+    year_s, w_s = week_iso.split("-W")
+    year, week = int(year_s), int(w_s)
+    monday = datetime.date.fromisocalendar(year, week, 1)
+    next_monday = monday + datetime.timedelta(days=7)
+    iso = next_monday.isocalendar()
     return f"{iso.year}-W{iso.week:02d}"
 
 
@@ -112,24 +151,37 @@ def _resolve_project(
 
 def _entries_grouped_by_project(
     conn: sqlite3.Connection, *, week_iso: str
-) -> dict[str, list[dict[str, Any]]]:
+) -> tuple[
+    dict[str, list[dict[str, Any]]],
+    dict[str, list[tuple[str, str]]],
+]:
     """그 주의 entries 를 프로젝트별로 그룹.
 
-    각 entry: {category, body_md}.
+    반환:
+      - by_project: 프로젝트 → entry({category, body_md}) 리스트.
+        body_md 에서 '[다음주]' 마커 라인은 제거된 상태.
+      - next_by_project: 프로젝트 → [(category, next_week_item), ...].
+        '[다음주]' 마커가 붙은 라인들을 카테고리와 함께 추출.
     """
     cat_map = _build_project_map(conn)
     pat_list = _build_pattern_map(conn)
     week = db.get_week(conn, week_iso)
     by_project: dict[str, list[dict[str, Any]]] = {}
+    next_by_project: dict[str, list[tuple[str, str]]] = {}
     for day in week:
         for entry in day["entries"]:
             cat = entry.get("category", "")
             proj = _resolve_project(cat, cat_map, pat_list)
+            cleaned_body, next_items = _extract_next_week_lines(
+                entry.get("body_md", "")
+            )
             by_project.setdefault(proj, []).append({
                 "category": cat,
-                "body_md": entry.get("body_md", ""),
+                "body_md": cleaned_body,
             })
-    return by_project
+            for text in next_items:
+                next_by_project.setdefault(proj, []).append((cat, text))
+    return by_project, next_by_project
 
 
 # ─── body_md tree-merge 헬퍼 ────────────────────────
@@ -168,19 +220,68 @@ def _parse_body_to_tree(body_md: str) -> list[_Node]:
     return roots
 
 
+_BULLET_PREFIX_RE = re.compile(r"^[\s\-\*•▪◦·]+")
+_INTERNAL_WS_RE = re.compile(r"\s+")
+
+# 후행 상태 마커. 같은 task 의 진행 → 완료 추적이 같은 key 로 머지되게.
+# 괄호형: (진행), (진행 중), (완료), (보류), (대기), (시작), (종료) 등
+# 단어형: 라인 끝의 ' 진행', ' 진행중', ' 완료', ' 보류', ' 대기', ' 시작', ' 종료'
+_TRAILING_PAREN_STATUS_RE = re.compile(
+    r"\s*[\(\[（［]\s*"
+    r"(?:진행|진행\s*중|진행중|완료|완료됨|보류|대기|시작|종료|done|wip|todo)"
+    r"\s*[\)\]）］]\s*$",
+    re.IGNORECASE,
+)
+_TRAILING_WORD_STATUS_RE = re.compile(
+    r"\s+(?:진행\s*중|진행중|진행|완료됨|완료|보류|대기|시작|종료|done|wip|todo)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _norm_line_key(line: str) -> str:
+    """머지/중복판정을 위한 라인 정규화 키.
+
+    - 양끝 공백 제거
+    - 선두 불릿/대시(-, *, •, ▪, ◦, ·) + 그 주변 공백 제거
+    - 내부 연속 공백을 한 칸으로 축소
+    - 양끝 마침표/콤마/세미콜론 제거
+    - 후행 상태 마커 (괄호형/단어형) 제거 — '(진행)', '완료' 등은 key 비교 제외
+
+    결과: 같은 내용을 다른 불릿/공백/구두점/진행 상태로 적어도 동일 key.
+    렌더링은 원본 line 을 그대로 사용 — 머지 시 가장 최근 line 으로 대체된다.
+    """
+    s = line.strip()
+    s = _BULLET_PREFIX_RE.sub("", s)
+    s = _INTERNAL_WS_RE.sub(" ", s)
+    s = s.strip(" .,;。、")
+    # 후행 상태 마커 제거. 괄호형 → 단어형 순으로 한 번씩 (둘 다 동시 등장 가능).
+    prev = None
+    while prev != s:
+        prev = s
+        s = _TRAILING_PAREN_STATUS_RE.sub("", s).rstrip()
+        s = _TRAILING_WORD_STATUS_RE.sub("", s).rstrip()
+    return s
+
+
 def _merge_trees(trees: list[list[_Node]]) -> list[_Node]:
-    """여러 트리의 같은-level 노드들을 content key(line.strip()) 로 머지.
+    """여러 트리의 같은-level 노드들을 정규화 key 로 머지.
 
     같은 key 의 자식 노드들은 재귀적으로 머지. 첫 등장 순서 보존.
-    입력 트리들을 mutate 하지 않도록 자식 리스트는 shallow copy 후 머지.
+    같은 key 가 다시 나타나면 line 텍스트는 가장 최근 것으로 대체 — 진행→완료
+    같은 상태 갱신을 자연스럽게 반영.
     """
     merged: list[_Node] = []
     by_key: dict[str, _Node] = {}
     for tree in trees:
         for src in tree:
-            key = src.line.strip()
+            key = _norm_line_key(src.line)
+            if not key:
+                # 정규화 후 빈 줄(불릿/공백만)이면 skip
+                continue
             if key in by_key:
                 existing = by_key[key]
+                # 가장 최근 line 으로 대체 (입력 trees 는 날짜 오름차순)
+                existing.line = src.line
                 existing.children = _merge_trees(
                     [existing.children, src.children]
                 )
@@ -195,12 +296,33 @@ def _merge_trees(trees: list[list[_Node]]) -> list[_Node]:
     return merged
 
 
+_HAS_BULLET_RE = re.compile(r"^\s*[\-\*•▪◦·\.]\s")
+
+
+def _ensure_bullet(line: str) -> str:
+    """라인에 불릿(-, *, •, ., …) 마커가 없으면 '- ' 를 prefix.
+
+    들여쓰기는 유지. 빈 라인은 그대로 둔다.
+    """
+    if not line.strip():
+        return line
+    if _HAS_BULLET_RE.match(line):
+        return line
+    indent = line[: len(line) - len(line.lstrip(" "))]
+    body = line[len(indent):]
+    return f"{indent}- {body}"
+
+
 def _render_tree(nodes: list[_Node]) -> str:
-    """트리를 DFS 로 다시 텍스트로. 원본 line 그대로 출력."""
+    """트리를 DFS 로 다시 텍스트로.
+
+    불릿이 없는 라인에는 '- ' prefix 를 자동 부여 — 일일보고 본문에서
+    대시 없이 적은 항목도 주간보고 셀에서는 일관된 불릿 리스트로 보이게.
+    """
     out: list[str] = []
 
     def walk(n: _Node) -> None:
-        out.append(n.line)
+        out.append(_ensure_bullet(n.line))
         for c in n.children:
             walk(c)
 
@@ -227,21 +349,30 @@ def _format_cell_text(entries: list[dict[str, Any]]) -> str:
 
         *) {다른 category}
           ...
+
+    카테고리 그룹 키는 정규화(좌우 공백 제거 + 내부 연속 공백 1개)된 형태로
+    비교하여 trailing space/오타 등으로 분리된 동일 카테고리를 한 묶음으로
+    합친다. 표시 이름은 첫 등장한 원본을 사용.
     """
-    # 카테고리별 그룹 (등장 순)
     by_cat: dict[str, list[str]] = {}
+    display_name: dict[str, str] = {}
     order: list[str] = []
     for e in entries:
-        cat = e["category"]
-        if cat not in by_cat:
-            by_cat[cat] = []
-            order.append(cat)
+        raw_cat = e.get("category", "") or ""
+        key = _INTERNAL_WS_RE.sub(" ", raw_cat.strip())
+        if not key:
+            continue
+        if key not in by_cat:
+            by_cat[key] = []
+            display_name[key] = raw_cat.strip()
+            order.append(key)
         body = (e.get("body_md") or "").rstrip()
         if body:
-            by_cat[cat].append(body)
+            by_cat[key].append(body)
     chunks: list[str] = []
-    for cat in order:
-        bodies = by_cat[cat]
+    for key in order:
+        bodies = by_cat[key]
+        cat = display_name[key]
         if bodies:
             body_block = _merge_bodies(bodies)
             chunks.append(f"*) {cat}\n{body_block}")
@@ -387,15 +518,20 @@ def build_weekly_table_rows(
     vacations 가 주어지면 그 안에서 지난주/이번주 휴가를 골라 마지막에
     '휴가' 프로젝트 행을 자동 추가. 양쪽 모두 비어있으면 행을 만들지 않는다.
     """
-    this_grouped = _entries_grouped_by_project(conn, week_iso=week_iso)
-    last_grouped = _entries_grouped_by_project(
+    this_grouped, this_next_by_project = _entries_grouped_by_project(
+        conn, week_iso=week_iso,
+    )
+    last_grouped, _ = _entries_grouped_by_project(
         conn, week_iso=_prev_week_iso(week_iso),
     )
+    next_grouped, _ = _entries_grouped_by_project(
+        conn, week_iso=_next_week_iso(week_iso),
+    )
 
-    # 자동 발견 프로젝트 순서 (지난주 → 이번주 등장 순)
+    # 자동 발견 프로젝트 순서 (지난주 → 이번주 → 다음주 등장 순)
     auto_order: list[str] = []
     seen: set[str] = set()
-    for grouped in (last_grouped, this_grouped):
+    for grouped in (last_grouped, this_grouped, next_grouped):
         for proj in grouped.keys():
             if proj not in seen:
                 auto_order.append(proj)
@@ -419,24 +555,43 @@ def build_weekly_table_rows(
                 "note": r.get("note", "") or "",
             }
 
-    project_order: list[str] = list(manual_order)
+    # 재생성 시 프로젝트 순서는 항상 이름 알파벳 정렬 (manual_order 무시).
+    # manual_lookup 은 next_week/note 값 보존에만 사용한다.
+    # 휴가 행은 별도 처리이므로 여기 제외.
+    all_projects: set[str] = set()
+    for proj in manual_order:
+        all_projects.add(proj)
     for proj in auto_order:
-        if proj not in manual_set:
-            project_order.append(proj)
+        all_projects.add(proj)
+    for proj in this_next_by_project.keys():
+        if proj == VACATION_PROJECT_NAME:
+            continue
+        all_projects.add(proj)
+    project_order: list[str] = sorted(all_projects, key=lambda s: s.casefold())
 
     out: list[dict] = []
     for proj in project_order:
         manual = manual_lookup.get(proj, {"next_week": "", "note": ""})
+        # next_week 셀 자동 채움:
+        # - 다음주 날짜의 daily entries (next_grouped)
+        # - 이번주 entries 본문의 [다음주] 마커를 pseudo-entry 로 동일 리스트에 append
+        # 둘을 한 리스트로 합친 뒤 _format_cell_text 로 카테고리 단위 머지/dedup.
+        next_entries: list[dict[str, Any]] = list(next_grouped.get(proj, []))
+        for cat, text in this_next_by_project.get(proj, []):
+            next_entries.append({"category": cat, "body_md": f"- {text}"})
+        auto_next = _format_cell_text(next_entries)
+        next_week_val = auto_next if auto_next else manual["next_week"]
         out.append({
             "project_name": proj,
             "last_week": _format_cell_text(last_grouped.get(proj, [])),
             "this_week": _format_cell_text(this_grouped.get(proj, [])),
-            "next_week": manual["next_week"],
+            "next_week": next_week_val,
             "note": manual["note"],
         })
 
-    # 휴가 행은 자동 생성 — 항상 마지막. 양쪽 셀 모두 비면 행 자체를 추가하지 않는다.
+    # 휴가 행은 자동 생성 — 항상 마지막. 세 셀 모두 비면 행 자체를 추가하지 않는다.
     last_iso = _prev_week_iso(week_iso)
+    next_iso = _next_week_iso(week_iso)
     vacs = vacations or []
     last_cell = _format_vacation_cell(
         _vac_in_week(vacs, last_iso), author_name=author_name,
@@ -444,12 +599,15 @@ def build_weekly_table_rows(
     this_cell = _format_vacation_cell(
         _vac_in_week(vacs, week_iso), author_name=author_name,
     )
-    if last_cell or this_cell:
+    next_cell = _format_vacation_cell(
+        _vac_in_week(vacs, next_iso), author_name=author_name,
+    )
+    if last_cell or this_cell or next_cell:
         out.append({
             "project_name": VACATION_PROJECT_NAME,
             "last_week": last_cell,
             "this_week": this_cell,
-            "next_week": "",
+            "next_week": next_cell,
             "note": "",
         })
     return out

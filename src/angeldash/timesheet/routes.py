@@ -1088,15 +1088,21 @@ def register_routes(app: FastAPI) -> None:
         existing = db_module.get_weekly_report(conn, week_iso)
         preserve = existing["rows"] if payload.preserve_manual else None
 
-        # 지난주/이번주 가 걸친 모든 month 휴가 fetch (set 으로 중복 제거)
+        # 지난주/이번주/다음주 가 걸친 모든 month 휴가 fetch (set 으로 중복 제거)
         year_s, w_s = week_iso.split("-W")
         this_monday = _dt.date.fromisocalendar(int(year_s), int(w_s), 1)
         this_friday = this_monday + _dt.timedelta(days=4)
         last_monday = this_monday - _dt.timedelta(days=7)
         last_friday = last_monday + _dt.timedelta(days=4)
+        next_monday = this_monday + _dt.timedelta(days=7)
+        next_friday = next_monday + _dt.timedelta(days=4)
         months = {
             d.strftime("%Y-%m")
-            for d in (last_monday, last_friday, this_monday, this_friday)
+            for d in (
+                last_monday, last_friday,
+                this_monday, this_friday,
+                next_monday, next_friday,
+            )
         }
         all_vacations: list[dict] = []
         for ym in sorted(months):

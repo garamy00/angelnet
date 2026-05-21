@@ -306,6 +306,44 @@ function renderDay(day, vacations, holiday) {
   return wrap;
 }
 
+// 본문 textarea 에서 Enter 시 불릿/들여쓰기 자동 이어쓰기.
+// 현재 라인 prefix 패턴:
+//   "- ", "* ", "• ", ". " (선택적 leading whitespace 포함)
+// Enter 누르면 다음 라인에 같은 prefix 자동 삽입.
+// 단, 현재 라인이 prefix 만 있고 본문이 비어있으면 → list exit (prefix 제거).
+const _BULLET_LINE_RE = /^(\s*)([\-\*•·\.]\s+)(.*)$/;
+
+function attachBulletAutocontinue(ta) {
+  if (!ta) return;
+  ta.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    const v = ta.value;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    if (start !== end) return;  // 선택 영역이 있으면 default 동작
+    const lineStart = v.lastIndexOf('\n', start - 1) + 1;
+    const curLine = v.slice(lineStart, start);
+    const m = curLine.match(_BULLET_LINE_RE);
+    if (!m) return;
+    const [, indent, prefix, rest] = m;
+    e.preventDefault();
+    if (!rest.trim()) {
+      // 빈 불릿 라인에서 Enter → 그 라인을 비워서 list exit
+      const before = v.slice(0, lineStart);
+      const after = v.slice(start);
+      ta.value = before + after;
+      const pos = lineStart;
+      ta.selectionStart = ta.selectionEnd = pos;
+    } else {
+      const insert = '\n' + indent + prefix;
+      ta.value = v.slice(0, start) + insert + v.slice(end);
+      const pos = start + insert.length;
+      ta.selectionStart = ta.selectionEnd = pos;
+    }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 function renderEntry(entry) {
   const row = document.createElement('div');
   row.className = 'entry';
@@ -321,7 +359,10 @@ function renderEntry(entry) {
       <span class="entry-spacer"></span>
       <button class="remove icon-only" type="button" title="이 카테고리 삭제" aria-label="카테고리 삭제">${icon('trash-2')}</button>
     </div>
-    <textarea class="entry-body" placeholder="본문 (markdown)">${escapeHtml(entry.body_md)}</textarea>
+    <textarea class="entry-body" placeholder="본문 (markdown). 예시:
+- 작업 A 진행, B 완료
+- 이슈 X 핫픽스 배포
+[다음주] 다음주 할 일은 이렇게 표시 (주간보고 자동 반영)">${escapeHtml(entry.body_md)}</textarea>
   `;
   updateEntryProject(row);
   const debounced = debounce(() => {
@@ -332,6 +373,7 @@ function renderEntry(entry) {
     el.addEventListener('input', debounced);
   }
   row.querySelector('.category').addEventListener('input', () => updateEntryProject(row));
+  attachBulletAutocontinue(row.querySelector('.entry-body'));
   row.querySelector('.remove').addEventListener('click', () => {
     const block = row.closest('.day-block');
     row.remove();

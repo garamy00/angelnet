@@ -289,7 +289,7 @@ document.getElementById('btn-generate-initial').addEventListener('click', async 
 });
 
 document.getElementById('btn-regenerate').addEventListener('click', async () => {
-  if (!confirm('지난주 한 일 / 이번주 한 일/할 일 셀을 daily entries 로 다시 채웁니다. (다음주/비고는 보존). 계속?')) {
+  if (!confirm('지난주 / 이번주 셀을 daily entries 로 다시 채웁니다.\n일일보고 본문의 [다음주] 마커가 있으면 다음주 셀도 자동 채움 (없으면 기존 값 보존).\n비고는 항상 보존. 계속?')) {
     return;
   }
   try {
@@ -444,10 +444,12 @@ function buildEmailPlain(rows, greeting, closing) {
 
 function openPreviewModal({ title, htmlForPreview, htmlForCopy, plainForCopy }) {
   const modal = document.getElementById('preview-modal');
-  document.getElementById('preview-modal-title').textContent = title;
+  // title 은 lucide placeholder 가 섞인 HTML 문자열이라 innerHTML 로 주입.
+  document.getElementById('preview-modal-title').innerHTML = title;
   // 미리보기 영역에는 결과 HTML 을 그대로 렌더 (sandbox 효과를 위해 iframe 사용 권장)
   // 단순화를 위해 직접 innerHTML — 본문은 사용자 본인이 작성한 것이라 XSS 위험 낮음.
   document.getElementById('preview-modal-body').innerHTML = htmlForPreview;
+  if (window.lucide?.createIcons) window.lucide.createIcons();
   const copyBtn = document.getElementById('preview-modal-copy');
   // 이전 핸들러 제거를 위해 cloneNode 트릭
   const newCopy = copyBtn.cloneNode(true);

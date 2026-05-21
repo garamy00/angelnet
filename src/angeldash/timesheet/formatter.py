@@ -13,6 +13,7 @@ from jinja2 import TemplateSyntaxError, select_autoescape
 from jinja2.sandbox import SandboxedEnvironment
 
 from . import db
+from .weekly_table import _extract_next_week_lines
 
 _DAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
 _DAY_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -35,8 +36,13 @@ def _entry_dict(row: dict[str, Any]) -> dict[str, Any]:
     body 는 trailing whitespace/newline 을 제거한 형태로 노출한다.
     텍스트에어리어 입력 끝에 자동 추가되는 newline 이 템플릿의 줄바꿈과 합쳐져
     카테고리 사이 빈 줄이 두 줄로 보이는 문제를 방지하기 위함.
+
+    '[다음주]' 마커 라인은 주간보고용 신호일 뿐 일/주간 리포트 출력에는
+    포함하지 않으므로 여기서 제거한다.
     """
-    body = (row.get("body_md") or "").rstrip()
+    raw_body = (row.get("body_md") or "").rstrip()
+    body, _ = _extract_next_week_lines(raw_body)
+    body = body.rstrip()
     if body:
         first, _, rest = body.partition("\n")
         body_first_line = first
