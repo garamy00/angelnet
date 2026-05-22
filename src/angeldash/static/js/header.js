@@ -21,6 +21,20 @@ const NAV_ITEMS = [
   { href: '/settings.html',    icon: 'settings',      label: '설정' },
 ];
 
+function renderBrand() {
+  const header = document.querySelector('header');
+  if (!header || header.querySelector('.brand')) return;
+  const a = document.createElement('a');
+  a.href = '/';
+  a.className = 'brand';
+  a.setAttribute('aria-label', 'Hey:log 홈으로');
+  a.innerHTML = `
+    <img class="brand-logo" src="/static/favicon.svg" alt="" width="22" height="22">
+    <span class="brand-name">Hey<span class="brand-colon">:</span>log</span>
+  `;
+  header.insertBefore(a, header.firstElementChild);
+}
+
 function renderNav() {
   const nav = document.querySelector('header nav');
   if (!nav) return;
@@ -84,6 +98,7 @@ function decorateRefresh() {
 
 export async function initHeader() {
   applyStoredTheme();
+  renderBrand();
   renderNav();
   injectThemeToggle();
   decorateRefresh();

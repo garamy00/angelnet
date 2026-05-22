@@ -116,7 +116,33 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
+
+/* 좌측 브랜드 로고 + 서비스명 */
+header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+  transition: background 120ms;
+}
+header .brand:hover { background: var(--color-surface-2); }
+header .brand .brand-logo {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+header .brand .brand-colon { color: var(--color-accent); margin: 0 1px; }
 
 header nav a {
   display: inline-flex;
