@@ -196,6 +196,140 @@ async def test_auto_relogin_skips_when_password_not_cached():
     assert len(scripted.calls) == 1
 
 
+@pytest.mark.anyio
+async def test_concurrent_requests_during_pre_emptive_refresh_share_single_login():
+    """idle 초과 상태 동시 N 요청 → refresh 1회, 동시 요청은 refresh 완료까지 대기."""
+    import asyncio
+    refresh_calls = 0
+    refresh_started = asyncio.Event()
+    refresh_can_complete = asyncio.Event()
+
+    async def slow_refresh():
+        nonlocal refresh_calls
+        refresh_calls += 1
+        refresh_started.set()
+        await refresh_can_complete.wait()
+
+    scripted = _ScriptedHttp([
+        _make_resp(200, text="A"),
+        _make_resp(200, text="B"),
+        _make_resp(200, text="C"),
+    ])
+    wrapper = AutoReloginHttp(
+        scripted, can_refresh=lambda: True, refresh=slow_refresh,
+        idle_timeout=60,
+    )
+    wrapper._last_active = time.time() - 120  # idle 초과 상태
+
+    # A 시작 → refresh 진입 대기
+    task_a = asyncio.create_task(wrapper.get("https://example/a"))
+    await refresh_started.wait()
+
+    # A 가 refresh 중인 동안 B, C 시작
+    task_b = asyncio.create_task(wrapper.get("https://example/b"))
+    task_c = asyncio.create_task(wrapper.get("https://example/c"))
+    await asyncio.sleep(0.02)  # B, C 가 lock 대기에 진입할 시간
+
+    # 핵심: single-flight 면 B, C 는 lock 에서 대기 중이라 HTTP 요청을 아직 못 함
+    # 현재 _refreshing boolean 코드에서는 B, C 가 stale 쿠키로 이미 발사됨 → assert 실패
+    assert len(scripted.calls) == 0, (
+        f"refresh 중에 동시 요청이 stale 쿠키로 발사됨 (calls={scripted.calls})"
+    )
+
+    refresh_can_complete.set()
+    results = await asyncio.gather(task_a, task_b, task_c)
+    assert all(r.status_code == 200 for r in results)
+    assert refresh_calls == 1
+    assert len(scripted.calls) == 3
+
+
+@pytest.mark.anyio
+async def test_concurrent_requests_during_reactive_refresh_wait_for_single_login():
+    """첫 요청이 401 받고 refresh 진행 중일 때 도착한 동시 요청은 lock 대기 후 신선한
+    쿠키로 발사 — stale 호출 자체가 발생하지 않고 refresh 도 1회만."""
+    import asyncio
+    refresh_calls = 0
+    refresh_started = asyncio.Event()
+    refresh_can_complete = asyncio.Event()
+
+    async def slow_refresh():
+        nonlocal refresh_calls
+        refresh_calls += 1
+        refresh_started.set()
+        await refresh_can_complete.wait()
+
+    scripted = _ScriptedHttp([
+        _make_resp(401),                # A first (stale)
+        _make_resp(200, text="A2"),     # A retry (refresh 후, fresh)
+        _make_resp(200, text="B"),      # B first (A의 refresh 대기 후, fresh)
+        _make_resp(200, text="C"),      # C first (대기 후, fresh)
+    ])
+    wrapper = AutoReloginHttp(
+        scripted, can_refresh=lambda: True, refresh=slow_refresh,
+        idle_timeout=10_000,  # idle 트리거 안 함 — 반응형만
+    )
+
+    task_a = asyncio.create_task(wrapper.get("https://example/a"))
+    await refresh_started.wait()  # A 가 401 받고 refresh 진입
+
+    task_b = asyncio.create_task(wrapper.get("https://example/b"))
+    task_c = asyncio.create_task(wrapper.get("https://example/c"))
+    await asyncio.sleep(0.02)  # B, C 가 elif wait-for-refresh 에 진입할 시간
+
+    # 핵심: single-flight 면 B, C 는 lock 대기 중이라 HTTP 요청 미발사 (1 = A first 만)
+    # 옛 _refreshing boolean 코드는 B, C 가 stale 호출 발사 → calls 가 1 초과
+    assert len(scripted.calls) == 1, (
+        f"B/C 가 refresh 대기 안 하고 stale 호출 발사 (calls={scripted.calls})"
+    )
+
+    refresh_can_complete.set()
+    results = await asyncio.gather(task_a, task_b, task_c)
+    assert all(r.status_code == 200 for r in results), (
+        f"statuses={[r.status_code for r in results]}"
+    )
+    assert refresh_calls == 1, f"refresh 가 {refresh_calls}회 — single-flight 위반"
+
+
+@pytest.mark.anyio
+async def test_refresh_internal_request_does_not_deadlock():
+    """refresh callback 이 wrapper 를 통해 login 호출해도 lock 재진입 deadlock 없음."""
+    import asyncio
+    refresh_call_count = 0
+
+    scripted = _ScriptedHttp([
+        _make_resp(401),  # user GET 첫 호출 — 만료
+        _make_resp(  # refresh 내부 login.json POST — 정상 JSON
+            200, text='{"ok": true}',
+            headers={"content-type": "application/json"},
+        ),
+        _make_resp(200, text="data"),  # user GET 재시도
+    ])
+    wrapper_holder: dict = {}
+
+    async def refresh():
+        nonlocal refresh_call_count
+        refresh_call_count += 1
+        # 실제 클라이언트 패턴: refresh 가 자기 자신을 통해 login 호출
+        await wrapper_holder["w"].post(
+            "https://example/home/login.json",
+            json={"userId": "x", "password": "y"},
+        )
+
+    wrapper = AutoReloginHttp(
+        scripted, can_refresh=lambda: True, refresh=refresh, idle_timeout=10_000,
+    )
+    wrapper_holder["w"] = wrapper
+
+    # 2초 안에 끝나야 함 — deadlock 이면 타임아웃
+    resp = await asyncio.wait_for(
+        wrapper.get("https://example/api"), timeout=2.0,
+    )
+    assert resp.status_code == 200
+    assert refresh_call_count == 1
+    # 3 calls: 첫 GET, refresh 안의 login POST, GET 재시도
+    assert len(scripted.calls) == 3
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

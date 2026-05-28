@@ -297,13 +297,17 @@ document.getElementById('btn-regenerate').addEventListener('click', async () => 
 });
 
 document.getElementById('btn-add-row').addEventListener('click', async () => {
-  currentRows.push({
+  // 휴가 행은 맨 아래 고정 — 새 행은 그 직전(없으면 맨 끝)에 삽입.
+  // push 로 끝에 넣으면 휴가 행 아래에 가서 ▲ 로 못 올라가는 버그가 됨.
+  const vacIdx = currentRows.findIndex(isVacationRow);
+  const insertIdx = vacIdx === -1 ? currentRows.length : vacIdx;
+  currentRows.splice(insertIdx, 0, {
     project_name: '', last_week: '', this_week: '', next_week: '', note: '',
   });
   await saveAll();
   renderRows();
-  const lastTr = document.getElementById('weekly-rows').lastElementChild;
-  if (lastTr) lastTr.querySelector('.cell-project').focus();
+  const newTr = document.getElementById('weekly-rows').children[insertIdx];
+  if (newTr) newTr.querySelector('.cell-project').focus();
 });
 
 document.getElementById('this-week').addEventListener('click', () => {
