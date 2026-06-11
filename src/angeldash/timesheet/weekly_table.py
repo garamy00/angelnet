@@ -178,6 +178,7 @@ def _entries_grouped_by_project(
             by_project.setdefault(proj, []).append({
                 "category": cat,
                 "body_md": cleaned_body,
+                "date": day["date"],
             })
             for text in next_items:
                 next_by_project.setdefault(proj, []).append((cat, text))
@@ -293,10 +294,115 @@ def _merge_trees(trees: list[list[_Node]]) -> list[_Node]:
                 )
                 merged.append(node)
                 by_key[key] = node
-    return merged
+    # dedup 직후 공통 prefix 가 긴 형제 노드들도 한 줄로 합쳐 출력
+    return _merge_similar_siblings(merged)
 
 
-_HAS_BULLET_RE = re.compile(r"^\s*[\-\*•▪◦·\.]\s")
+# 라인을 (들여쓰기, 불릿, 단어 리스트) 로 분리하기 위한 패턴.
+_LINE_PARTS_RE = re.compile(
+    r"^(\s*)((?:->|=>|[\-\*•▪◦·\.])\s+)?(.*)$"
+)
+
+
+def _parse_line_parts(line: str) -> tuple[str, str, list[str]]:
+    """라인을 (들여쓰기, 불릿 마커, 단어 리스트) 로 분리."""
+    m = _LINE_PARTS_RE.match(line)
+    if not m:
+        return "", "", line.split()
+    return m.group(1) or "", m.group(2) or "", (m.group(3) or "").split()
+
+
+def _word_common_prefix_len(a: list[str], b: list[str]) -> int:
+    i = 0
+    while i < min(len(a), len(b)) and a[i] == b[i]:
+        i += 1
+    return i
+
+
+def _can_extend_group(
+    group: list[_Node],
+    candidate: _Node,
+    *,
+    min_common_words: int = 3,
+    max_leaf_words: int = 4,
+) -> bool:
+    """group + candidate 가 같은 indent/bullet 이고 공통 단어 prefix 가 길고
+    각자의 leaf 가 짧으면 머지 가능.
+    """
+    if not group:
+        return True
+    ind0, bul0, _ = _parse_line_parts(group[0].line)
+    indc, bulc, words_c = _parse_line_parts(candidate.line)
+    if ind0 != indc or bul0 != bulc:
+        return False
+    if not words_c:
+        return False
+    for n in group:
+        _, _, words_n = _parse_line_parts(n.line)
+        common = _word_common_prefix_len(words_n, words_c)
+        if common < min_common_words:
+            return False
+        leaf_n = len(words_n) - common
+        leaf_c = len(words_c) - common
+        # 완전 동일(이미 dedup) 이면 leaf 가 0 → 머지 후보 아님
+        if leaf_n == 0 or leaf_c == 0:
+            return False
+        if leaf_n > max_leaf_words or leaf_c > max_leaf_words:
+            return False
+    return True
+
+
+def _combine_with_slash(group: list[_Node]) -> str:
+    """공통 단어 prefix + 'leaf1/leaf2/...' 한 줄로."""
+    parts = [_parse_line_parts(n.line) for n in group]
+    indent, bullet = parts[0][0], parts[0][1]
+    words_lists = [p[2] for p in parts]
+    common = len(words_lists[0])
+    for w in words_lists[1:]:
+        common = min(common, _word_common_prefix_len(words_lists[0], w))
+    prefix_words = words_lists[0][:common]
+    suffix_strs = [" ".join(w[common:]) for w in words_lists]
+    head = " ".join(prefix_words)
+    suffix_combined = "/".join(suffix_strs)
+    body = f"{head} {suffix_combined}" if head else suffix_combined
+    return f"{indent}{bullet}{body}"
+
+
+def _merge_similar_siblings(nodes: list[_Node]) -> list[_Node]:
+    """공통 prefix 가 긴 형제 노드들을 'prefix leaf1/leaf2' 한 줄로 결합.
+
+    같은 indent + 같은 불릿 마커를 가진 형제 노드들만 검사. 머지된 노드의
+    children 은 첫 노드의 것을 그대로 사용 (leaf line 들 대상이라 보통 비어있음).
+    """
+    if len(nodes) < 2:
+        return nodes
+    used = [False] * len(nodes)
+    out: list[_Node] = []
+    for i in range(len(nodes)):
+        if used[i]:
+            continue
+        group_idxs = [i]
+        for k in range(i + 1, len(nodes)):
+            if used[k]:
+                continue
+            group = [nodes[g] for g in group_idxs]
+            if _can_extend_group(group, nodes[k]):
+                group_idxs.append(k)
+        for idx in group_idxs:
+            used[idx] = True
+        if len(group_idxs) >= 2:
+            group = [nodes[g] for g in group_idxs]
+            out.append(_Node(
+                depth=group[0].depth,
+                line=_combine_with_slash(group),
+                children=group[0].children,
+            ))
+        else:
+            out.append(nodes[i])
+    return out
+
+
+_HAS_BULLET_RE = re.compile(r"^\s*(?:->|=>|[\-\*•▪◦·\.])\s")
 
 
 def _ensure_bullet(line: str) -> str:
@@ -340,7 +446,9 @@ def _merge_bodies(bodies: list[str]) -> str:
     return _render_tree(merged)
 
 
-def _format_cell_text(entries: list[dict[str, Any]]) -> str:
+def _format_cell_text(
+    entries: list[dict[str, Any]], *, show_dates: bool = True,
+) -> str:
     """카테고리별로 묶어 셀 텍스트 생성.
 
     형식:
@@ -356,6 +464,7 @@ def _format_cell_text(entries: list[dict[str, Any]]) -> str:
     """
     by_cat: dict[str, list[str]] = {}
     display_name: dict[str, str] = {}
+    dates_by_cat: dict[str, set[str]] = {}
     order: list[str] = []
     for e in entries:
         raw_cat = e.get("category", "") or ""
@@ -365,20 +474,52 @@ def _format_cell_text(entries: list[dict[str, Any]]) -> str:
         if key not in by_cat:
             by_cat[key] = []
             display_name[key] = raw_cat.strip()
+            dates_by_cat[key] = set()
             order.append(key)
         body = (e.get("body_md") or "").rstrip()
         if body:
             by_cat[key].append(body)
+        d = e.get("date")
+        if d:
+            dates_by_cat[key].add(d)
     chunks: list[str] = []
     for key in order:
         bodies = by_cat[key]
         cat = display_name[key]
+        date_suffix = (
+            _format_date_suffix(dates_by_cat[key]) if show_dates else ""
+        )
+        header = f"*) {cat}{date_suffix}"
         if bodies:
             body_block = _merge_bodies(bodies)
-            chunks.append(f"*) {cat}\n{body_block}")
+            chunks.append(f"{header}\n{body_block}")
         else:
-            chunks.append(f"*) {cat}")
+            chunks.append(header)
     return "\n\n".join(chunks)
+
+
+def _format_date_suffix(dates: set[str]) -> str:
+    """카테고리 헤더에 붙일 날짜 표시.
+
+    - 1일만: '(M/D)'
+    - 여러 날: '(min~max)' (각각 'M/D' 형식)
+    - 비어있으면 ''
+    """
+    if not dates:
+        return ""
+    parsed = []
+    for d in dates:
+        try:
+            parsed.append(datetime.date.fromisoformat(d))
+        except ValueError:
+            continue
+    if not parsed:
+        return ""
+    mn = min(parsed)
+    mx = max(parsed)
+    if mn == mx:
+        return f"({mn.month}/{mn.day})"
+    return f"({mn.month}/{mn.day}~{mx.month}/{mx.day})"
 
 
 # ─── 휴가 행 자동 생성 헬퍼 ─────────────────────────
@@ -579,7 +720,8 @@ def build_weekly_table_rows(
         next_entries: list[dict[str, Any]] = list(next_grouped.get(proj, []))
         for cat, text in this_next_by_project.get(proj, []):
             next_entries.append({"category": cat, "body_md": f"- {text}"})
-        auto_next = _format_cell_text(next_entries)
+        # 다음주 할 일은 사용자가 직접 편집할 영역 — 자동 날짜 표시 제외
+        auto_next = _format_cell_text(next_entries, show_dates=False)
         next_week_val = auto_next if auto_next else manual["next_week"]
         out.append({
             "project_name": proj,

@@ -206,10 +206,8 @@ def test_resolve_project_treats_whitespace_as_unset(seeded_conn) -> None:
     assert "OAM 공통" in names  # whitespace 만 → fallback
 
 
-def test_build_rows_preserves_manual_row_order(seeded_conn) -> None:
-    """사용자가 ▲▼ 로 정한 순서가 재생성에서도 그대로 보존된다."""
-    # 자동 순서는 OAM 공통 → SKT SMSC → (매핑 없음) 인데
-    # manual 에서는 SKT SMSC → OAM 공통 순으로 둠
+def test_build_rows_sorts_alphabetically(seeded_conn) -> None:
+    """재생성 시 프로젝트 행은 manual 순서 무시하고 이름 알파벳 정렬."""
     manual = [
         {"project_name": "SKT SMSC", "last_week": "", "this_week": "",
          "next_week": "", "note": ""},
@@ -220,9 +218,9 @@ def test_build_rows_preserves_manual_row_order(seeded_conn) -> None:
         seeded_conn, week_iso="2026-W20", preserve_manual_rows=manual,
     )
     names = [r["project_name"] for r in rows]
-    # manual 순서가 앞쪽에서 유지되고, 새 프로젝트('(매핑 없음)')는 뒤에 추가
-    assert names.index("SKT SMSC") < names.index("OAM 공통")
-    assert names.index("OAM 공통") < names.index("(매핑 없음)")
+    # 알파벳 (casefold) 정렬 — '(매핑 없음)' (괄호=ASCII 0x28) < 'OAM' < 'SKT'
+    assert names.index("(매핑 없음)") < names.index("OAM 공통")
+    assert names.index("OAM 공통") < names.index("SKT SMSC")
 
 
 def test_build_rows_no_vacation_row_when_empty(seeded_conn) -> None:

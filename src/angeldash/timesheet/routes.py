@@ -1761,12 +1761,15 @@ def register_routes(app: FastAPI) -> None:
     ) -> tuple[bool, str]:
         """주간 메모(week_note) 를 Week Summary DB 에 동기화.
 
-        반환: (synced, action) — action 은 'created' | 'updated' | 'skipped(empty)'
-        body_md 가 비어 있으면 skip.
+        반환: (synced, action) — 'created' | 'created(empty)' | 'updated'
+              | 'updated(props_only)'
+
+        본문 비어있어도 그 주차 페이지는 항상 보장 (캘린더 표시용). 단,
+        본문이 비어있을 때 기존 페이지의 children 은 건드리지 않아 사용자가
+        Notion 에서 직접 작성한 내용을 보호한다.
         """
         body_md = (db_module.get_week_note(conn, week_iso) or "").rstrip()
-        if not body_md.strip():
-            return False, "skipped(empty)"
+        has_body = bool(body_md.strip())
 
         title_prop = (
             db_module.get_setting(conn, "notion.week_prop_title") or "Week"
@@ -1779,7 +1782,6 @@ def register_routes(app: FastAPI) -> None:
             title_prop: notion_module.title_prop(week_iso),
             date_prop: notion_module.date_prop(monday_iso),
         }
-        children = [notion_module.code_block(body_md)]
 
         async with notion_module.NotionClient(token) as nc:
             existing = await nc.query_database(
@@ -1791,14 +1793,22 @@ def register_routes(app: FastAPI) -> None:
             if existing:
                 page_id = existing[0]["id"]
                 await nc.update_page(page_id, properties=properties)
-                await nc.replace_page_children(page_id, children=children)
-                return True, "updated"
+                if has_body:
+                    await nc.replace_page_children(
+                        page_id,
+                        children=[notion_module.code_block(body_md)],
+                    )
+                    return True, "updated"
+                return True, "updated(props_only)"
+            children = (
+                [notion_module.code_block(body_md)] if has_body else []
+            )
             await nc.create_page(
                 database_id=week_db_id,
                 properties=properties,
                 children=children,
             )
-            return True, "created"
+            return True, "created" if has_body else "created(empty)"
 
 
     def _notion_keychain() -> KeychainStore:

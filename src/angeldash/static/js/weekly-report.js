@@ -256,6 +256,8 @@ async function saveAll() {
   try {
     await apiPut(`/api/weekly-reports/${currentWeek}`,
       { rows: currentRows });
+    // 첫 저장 시 사이드바에 새 주차 항목이 추가되므로 갱신
+    reloadWeeklySidebar();
   } catch (e) {
     toast(`저장 실패: ${e.message}`, 'fail');
   }
@@ -278,6 +280,7 @@ document.getElementById('btn-generate-initial').addEventListener('click', async 
     );
     currentRows = r.rows || [];
     renderRows();
+    reloadWeeklySidebar();
     if (currentRows.length === 0) {
       toast('이 주에는 daily entries 가 없습니다');
     } else {
@@ -299,6 +302,7 @@ document.getElementById('btn-regenerate').addEventListener('click', async () => 
     );
     currentRows = r.rows || [];
     renderRows();
+    reloadWeeklySidebar();
     toast('재생성됨');
   } catch (e) {
     toast(`재생성 실패: ${e.message}`, 'fail');
@@ -593,13 +597,18 @@ document.getElementById('btn-notion-weekly').addEventListener('click', async () 
 initHeader();
 initOngoingSchedule();
 enableColumnResize(document.getElementById('weekly-table'));
-loadWeekSidebar({
-  indexUrl: '/api/weekly-reports',
-  currentWeek,
-  navigate: (weekIso) => {
-    currentWeek = weekIso;
-    syncUrlToCurrentWeek();
-    loadWeek();
-    highlightCurrent(weekIso);
-  },
-});
+
+function reloadWeeklySidebar() {
+  loadWeekSidebar({
+    indexUrl: '/api/weekly-reports',
+    currentWeek,
+    navigate: (weekIso) => {
+      currentWeek = weekIso;
+      syncUrlToCurrentWeek();
+      loadWeek();
+      highlightCurrent(weekIso);
+    },
+  });
+}
+
+reloadWeeklySidebar();

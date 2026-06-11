@@ -1403,6 +1403,8 @@ def test_put_daily_meta_rejects_invalid(api):
 
 
 def test_team_report_includes_source_commit_and_misc(api):
+    # 기본은 source_commit 미포함이라 명시적으로 활성화
+    api.put("/api/settings", json={"team_report.include_source_commit": "true"})
     api.put("/api/days/2026-05-12", json={
         "week_iso": "2026-W20",
         "entries": [{"category": "X", "hours": 8, "body_md": " - 작업"}],
@@ -1419,6 +1421,7 @@ def test_team_report_includes_source_commit_and_misc(api):
 
 
 def test_team_report_omits_misc_when_empty(api):
+    api.put("/api/settings", json={"team_report.include_source_commit": "true"})
     api.put("/api/days/2026-05-12", json={
         "week_iso": "2026-W20",
         "entries": [{"category": "X", "hours": 8, "body_md": " - 작업"}],
@@ -1432,6 +1435,20 @@ def test_team_report_omits_misc_when_empty(api):
     assert "*) 소스 Commit" in text
     assert "- 추후" in text
     assert "*) 기타" not in text
+
+
+def test_team_report_excludes_source_commit_by_default(api):
+    """기본 설정에서 소스 Commit 섹션 제외 (team_report.include_source_commit=false)."""
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W20",
+        "entries": [{"category": "X", "hours": 8, "body_md": " - 작업"}],
+    })
+    api.put("/api/days/2026-05-12/meta", json={
+        "source_commit": "done", "misc_note": "",
+    })
+    r = api.post("/api/actions/team-report", json={"date": "2026-05-12"})
+    text = r.json()["text"]
+    assert "*) 소스 Commit" not in text
 
 
 def test_misc_auto_route_basic(api, mock_client):

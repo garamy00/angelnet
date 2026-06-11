@@ -507,9 +507,16 @@ document.getElementById('btn-notion').addEventListener('click', async () => {
   try {
     const r = await apiPost('/api/actions/notion-sync', { week_iso: currentWeek });
     p.close();
-    const weekLine = r.week_action && r.week_action !== 'skipped(empty)'
-      ? `\nWeek Summary: ${r.week_action}`
-      : (r.week_action === 'skipped(empty)' ? '\nWeek Summary: 메모 비어있어 건너뜀' : '');
+    const weekActionLabel = {
+      created: '신규 생성',
+      'created(empty)': '신규 생성 (메모 비어있음)',
+      updated: '갱신',
+      'updated(props_only)': '갱신 (props 만, 본문 보존)',
+      'skipped(empty)': '메모 비어있어 건너뜀',
+    };
+    const weekLine = r.week_action
+      ? `\nWeek Summary: ${weekActionLabel[r.week_action] || r.week_action}`
+      : '';
     flash(
       `Notion 동기화 완료\n생성 ${r.created} / 갱신 ${r.updated} (총 ${r.total})${weekLine}`,
       'ok',
