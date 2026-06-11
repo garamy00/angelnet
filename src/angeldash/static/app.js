@@ -278,6 +278,8 @@ function paintReservation(res, room) {
     (res.is_repeat ? " repeat" : "");
   block.style.top = `${top}px`;
   block.style.height = `${height}px`;
+  // hover tooltip 이 실제 미팅 시작 시각을 표시할 수 있게 dataset 으로 노출.
+  block.dataset.startMin = String(startMin);
   block.title = `${res.creator_name} · ${res.reason}`;
   // 예약자 이름을 굵게 강조해 다크 배경에서도 식별 용이
   block.innerHTML =
@@ -484,6 +486,8 @@ function paintWeekReservation(res, room, tbody, dayIdx, roomIdx, roomsN) {
     (res.is_repeat ? " repeat" : "");
   block.style.top = `${top}px`;
   block.style.height = `${height}px`;
+  // hover tooltip 이 실제 미팅 시작 시각을 표시할 수 있게 dataset 으로 노출.
+  block.dataset.startMin = String(startMin);
   block.title = `${res.creator_name} · ${res.reason}`;
   block.innerHTML =
     `<strong class="who">${escapeHtml(res.creator_name)}</strong>` +
@@ -766,12 +770,21 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(tip);
 
   document.body.addEventListener("mousemove", (e) => {
-    const cell = e.target.closest("td.empty, td.wg-cell");
+    // elementsFromPoint 로 시각적 위치 기준 hit-test (closest 는 블록의 DOM 부모
+    // = 08:00 셀로 잘못 잡힌다). 예약 블록 위면 미팅의 startMin (dataset) 을 우선
+    // 사용해 회의 시작 시각을 보여주고, 빈 셀이면 그 셀의 dataset.minutes 사용.
+    const elements = document.elementsFromPoint(e.clientX, e.clientY);
+    const block = elements.find((el) => el.dataset && el.dataset.startMin);
+    const cell = elements.find(
+      (el) => el.matches && el.matches("td.empty, td.wg-cell"),
+    );
     if (!cell) {
       tip.style.display = "none";
       return;
     }
-    const mins = Number(cell.dataset.minutes);
+    const mins = block
+      ? Number(block.dataset.startMin)
+      : Number(cell.dataset.minutes);
     if (Number.isNaN(mins)) {
       tip.style.display = "none";
       return;

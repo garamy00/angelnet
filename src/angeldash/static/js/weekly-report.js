@@ -247,9 +247,27 @@ async function saveAll() {
   try {
     await apiPut(`/api/weekly-reports/${currentWeek}`,
       { rows: currentRows });
+    // 저장 직후 사이드바 갱신 — 새 주차가 즉시 '저장된 주간업무보고' 에 보이게.
+    reloadWeekSidebar();
   } catch (e) {
     toast(`저장 실패: ${e.message}`, 'fail');
   }
+}
+
+// 사이드바 (저장된 주간업무보고 목록) 재로드 — 저장/생성/네비게이션 후 호출.
+function reloadWeekSidebar() {
+  loadWeekSidebar({
+    indexUrl: '/api/weekly-reports',
+    currentWeek,
+    navigate: navigateToWeek,
+  });
+}
+
+function navigateToWeek(weekIso) {
+  currentWeek = weekIso;
+  syncUrlToCurrentWeek();
+  loadWeek();
+  highlightCurrent(weekIso);
 }
 
 // ─── 액션 핸들러 ──────────────────────────────────
@@ -269,6 +287,8 @@ document.getElementById('btn-generate-initial').addEventListener('click', async 
     );
     currentRows = r.rows || [];
     renderRows();
+    // 새 주차 보고서가 생성됐으니 사이드바도 갱신.
+    reloadWeekSidebar();
     if (currentRows.length === 0) {
       toast('이 주에는 daily entries 가 없습니다');
     } else {
@@ -290,6 +310,8 @@ document.getElementById('btn-regenerate').addEventListener('click', async () => 
     );
     currentRows = r.rows || [];
     renderRows();
+    // 재생성으로 새 주차에 보고서가 처음 생긴 경우도 사이드바에 즉시 반영.
+    reloadWeekSidebar();
     toast('재생성됨');
   } catch (e) {
     toast(`재생성 실패: ${e.message}`, 'fail');
@@ -558,13 +580,4 @@ loadCachedSettings();
 initHeader();
 initOngoingSchedule();
 enableColumnResize(document.getElementById('weekly-table'));
-loadWeekSidebar({
-  indexUrl: '/api/weekly-reports',
-  currentWeek,
-  navigate: (weekIso) => {
-    currentWeek = weekIso;
-    syncUrlToCurrentWeek();
-    loadWeek();
-    highlightCurrent(weekIso);
-  },
-});
+reloadWeekSidebar();
