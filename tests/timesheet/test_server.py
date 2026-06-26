@@ -610,6 +610,64 @@ def test_timesheet_submit_matches_by_work_type(api, mock_client):
     assert rows[0]["task_id"] == "30002"
 
 
+def test_timesheet_submit_pattern_match_uses_project_work_type(
+    api, mock_client,
+):
+    """패턴 매핑 경로도 project.work_type 으로 (name, work_type) 정확 매칭.
+
+    카테고리 매핑 경로와 동일하게 work_type 을 읽어야 — 못 읽으면 name-only
+    fallback 으로 회사 응답에서 첫 동명 task 가 잘못 선택됨 (R685 PKG 가
+    [공통 개발] 대신 [세미나] 로 가버린 실 사례).
+    """
+    mock_client.user_id = "alice"
+    # 회사 시스템: 같은 이름 두 task — work_type 만 다름.
+    # 첫 응답이 "세미나" (의도와 다름) — name-only fallback 시 잘못 선택될 후보.
+    mock_client.list_jobtime_tasks = AsyncMock(return_value=[
+        {"task_id": "60001", "name": "행정, 공통개발업무",
+         "work_type": "세미나"},
+        {"task_id": "60002", "name": "행정, 공통개발업무",
+         "work_type": "공통 개발"},
+    ])
+    mock_client.submit_jobtimes = AsyncMock(return_value="OK")
+
+    # 카테고리는 매핑 안 함 — 본문 substring(R685 PKG)으로 패턴 매칭 유도.
+    api.put("/api/days/2026-05-12", json={
+        "week_iso": "2026-W19",
+        "entries": [{
+            "category": "SKT 지능망",
+            "hours": 1,
+            "body_md": "- R685 PKG 기능 개발\n   . 설계 문서 작성",
+        }],
+    })
+    # 프로젝트: work_type="공통 개발" 명시
+    pid = api.post("/api/projects", json={
+        "name": "행정, 공통개발업무",
+        "remote_id": "행정, 공통개발업무",
+        "work_type": "공통 개발",
+    }).json()["id"]
+    # 패턴 매핑 — 카테고리 매핑 아닌 패턴 경로로 흘러가도록
+    api.post("/api/pattern-mappings", json={
+        "pattern": "R685 PKG",
+        "project_id": pid,
+        "excluded": False,
+    })
+
+    r = api.post(
+        "/api/actions/timesheet-submit",
+        json={"date": "2026-05-12", "dry_run": False},
+    )
+    assert r.status_code == 200, r.text
+    rows = mock_client.submit_jobtimes.await_args[0][0]
+    # work_type="공통 개발" task 인 60002 가 선택되어야 함.
+    # 버그: 패턴 경로가 project.work_type 을 무시 → name-only fallback →
+    # 첫 응답 60001 [세미나] 가 잘못 선택됨.
+    assert rows[0]["task_id"] == "60002", (
+        f"패턴 매핑 경로가 project.work_type 을 무시함 — "
+        f"잘못된 task '{rows[0]['task_id']}' 선택 (60001=[세미나] 추정). "
+        f"60002 [공통 개발] 가 정답."
+    )
+
+
 def test_timesheet_submit_falls_back_to_name_only_for_legacy_projects(
     api, mock_client,
 ):
@@ -1212,6 +1270,68 @@ def test_verify_distinguishes_tasks_by_work_type(api, mock_client):
         and it["remote_hours"] == 2.0
         for it in orphans
     ), "회사 [개발] 의 2h 가 orphan 으로 표시되어야 함"
+
+
+def test_verify_pattern_match_uses_project_work_type(api, mock_client):
+    """패턴 매핑 경로의 verify 도 project.work_type 으로 정확 비교.
+
+    submit 과 동일한 work_type 누락 버그가 verify 에도 있으면, R685 PKG 1h 가
+    엉뚱한 [세미나] task 에 들어가 있어도 name-only 합산이 일치해 'synced'
+    오판단 → 사용자가 잘못된 입력을 발견 못 함.
+    """
+    from unittest.mock import AsyncMock
+    mock_client.user_id = "alice"
+    # 회사: [세미나] 1h (의도와 다른 곳), [공통 개발] 0h (의도한 곳).
+    mock_client.fetch_jobtime_grid_detailed = AsyncMock(return_value=[
+        {"task_name": "행정, 공통개발업무",
+         "label": "행정, 공통개발업무 [세미나]",
+         "work_type": "세미나", "days": {15: 1.0}},
+        {"task_name": "행정, 공통개발업무",
+         "label": "행정, 공통개발업무 [공통 개발]",
+         "work_type": "공통 개발", "days": {}},
+    ])
+
+    # 로컬: 본문 패턴 "R685 PKG" → 프로젝트 [공통 개발] 1h
+    pid = api.post("/api/projects", json={
+        "name": "행정, 공통개발업무",
+        "remote_id": "행정, 공통개발업무",
+        "work_type": "공통 개발",
+    }).json()["id"]
+    api.post("/api/pattern-mappings", json={
+        "pattern": "R685 PKG",
+        "project_id": pid,
+        "excluded": False,
+    })
+    # 2026-05-15 (금) 는 2026-W20 의 날짜 — week_iso 와 날짜 정합성 유지
+    api.put("/api/days/2026-05-15", json={
+        "week_iso": "2026-W20",
+        "entries": [{
+            "category": "SKT 지능망",
+            "hours": 1,
+            "body_md": "- R685 PKG 기능 개발",
+        }],
+    })
+
+    r = api.get("/api/timesheet/verify?week_iso=2026-W20")
+    items = r.json()["items"]
+
+    # 로컬 entry: [공통 개발] 에는 실제로 0 → not_submitted 여야 함.
+    # 버그: 패턴경로가 work_type 무시 → name-only 합 1h 가 로컬 1h 와 같음 → 'synced'.
+    skt = [it for it in items if it.get("category") == "SKT 지능망"]
+    assert skt, "SKT 지능망 entry 가 verify items 에 있어야 함"
+    assert skt[0]["sync_status"] != "synced", (
+        f"패턴매칭 경로가 work_type 을 무시해 잘못된 'synced' 판정 — "
+        f"status={skt[0]['sync_status']}, remote_hours={skt[0].get('remote_hours')}"
+    )
+
+    # 회사 [세미나] 1h 는 orphan (로컬 매핑이 [공통 개발] 이라 매칭 안 됨)
+    orphans = [it for it in items if it.get("sync_status") == "orphan"]
+    assert any(
+        it.get("task_name") == "행정, 공통개발업무"
+        and it.get("task_work_type") == "세미나"
+        and it.get("remote_hours") == 1.0
+        for it in orphans
+    ), "회사 [세미나] 의 1h 는 orphan 으로 분류돼야 함"
 
 
 def test_verify_legacy_project_without_work_type_falls_back_to_name(

@@ -621,11 +621,19 @@ def register_routes(app: FastAPI) -> None:
                     continue
                 if pm["project_id"] is not None:
                     project = conn.execute(
-                        "SELECT name, remote_id FROM projects WHERE id = ?",
+                        "SELECT name, remote_id, work_type FROM projects "
+                        "WHERE id = ?",
                         (pm["project_id"],),
                     ).fetchone()
                     task_name = (
                         (project["remote_id"] or "").strip() if project else ""
+                    )
+                    # 카테고리 매핑 분기와 대칭 — work_type 도 같이 읽어
+                    # _remote_hours 의 (name, work_type) 정확 매칭이 동작하게.
+                    # 누락 시 name-only 합산 fallback 으로 [세미나]·[공통 개발]
+                    # 양쪽 시간이 합쳐져 잘못된 'synced' 판정이 난다.
+                    task_work_type = (
+                        (project["work_type"] or "").strip() if project else ""
                     )
                     if not task_name:
                         items.append({**e, "sync_status": "no_remote_id",
@@ -633,6 +641,7 @@ def register_routes(app: FastAPI) -> None:
                         continue
                     to_check.append({
                         **e, "task_name": task_name,
+                        "task_work_type": task_work_type,
                         "matched_pattern": pm["pattern"],
                     })
                     needed_months.add(e["date"][:7])
@@ -1589,11 +1598,20 @@ def register_routes(app: FastAPI) -> None:
                     continue
                 if pm["project_id"] is not None:
                     project = conn.execute(
-                        "SELECT name, remote_id FROM projects WHERE id = ?",
+                        "SELECT name, remote_id, work_type FROM projects "
+                        "WHERE id = ?",
                         (pm["project_id"],),
                     ).fetchone()
                     task_name = (
                         (project["remote_id"] or "").strip()
+                        if project else ""
+                    )
+                    # 카테고리 매핑 분기와 대칭 — work_type 도 같이 읽어 회사
+                    # 시스템의 (name, work_type) 정확 매칭이 가능하게 한다.
+                    # 누락 시 name-only fallback 으로 동명 다른 task 가
+                    # 잘못 선택되는 회귀가 생긴다.
+                    task_work_type = (
+                        (project["work_type"] or "").strip()
                         if project else ""
                     )
                     if not task_name:
@@ -1606,8 +1624,10 @@ def register_routes(app: FastAPI) -> None:
                     items.append({**e, "status": "ready",
                                   "project_name": pm["project_name"],
                                   "task_name": task_name,
+                                  "task_work_type": task_work_type,
                                   "matched_pattern": pm["pattern"]})
-                    ready.append({**e, "task_name": task_name})
+                    ready.append({**e, "task_name": task_name,
+                                  "task_work_type": task_work_type})
                     continue
                 # project_id 없는 패턴 매핑 — 카테고리 매핑으로 fallback
 
